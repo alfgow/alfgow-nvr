@@ -86,11 +86,13 @@ export default function CameraCard({ camera, onSelect }) {
 
       {/* Video area */}
       <div
+        onDoubleClick={onSelect}
         style={{
           position: 'relative',
           aspectRatio: '16/9',
           background: '#000',
           overflow: 'hidden',
+          cursor: 'pointer',
         }}
       >
         {camera.status === 'ONLINE' ? (
