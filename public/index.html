@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alfgow NVR</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      background: #0f172a;
+    }
+
+    .glass {
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+  </style>
+</head>
+<body class="text-white min-h-screen">
+
+  <header class="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold">Alfgow NVR</h1>
+      <p class="text-slate-400 text-sm">
+        Mini Datacenter CCTV System
+      </p>
+    </div>
+
+    <div class="text-sm text-emerald-400">
+      ● LIVE
+    </div>
+  </header>
+
+<main class="p-6">
+
+  <div
+    id="camera-grid"
+    class="grid grid-cols-1 md:grid-cols-2 gap-6">
+  </div>
+
+</main>
+
+<script>
+  const cameras = [
+    {
+      id: 'cam1',
+      name: 'Cam1 - Entrada Principal',
+      subtitle: 'Hikvision RTSP',
+      stream: '/live/cam1/index.m3u8',
+      status: 'ONLINE'
+    },
+    {
+      id: 'cam2',
+      name: 'Cam2 - Pendiente',
+      subtitle: 'Sin configurar',
+      stream: '/live/cam2/index.m3u8',
+      status: 'OFFLINE'
+    },
+    {
+      id: 'cam3',
+      name: 'Cam3 - Pendiente',
+      subtitle: 'Sin configurar',
+      stream: '/live/cam3/index.m3u8',
+      status: 'OFFLINE'
+    },
+    {
+      id: 'cam4',
+      name: 'Cam4 - Pendiente',
+      subtitle: 'Sin configurar',
+      stream: '/live/cam4/index.m3u8',
+      status: 'OFFLINE'
+    }
+  ];
+
+  const grid = document.getElementById('camera-grid');
+
+  cameras.forEach((camera) => {
+    const card = document.createElement('div');
+    card.className = 'glass rounded-2xl overflow-hidden shadow-2xl';
+
+    card.innerHTML = `
+      <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h2 class="font-semibold">${camera.name}</h2>
+          <p class="text-xs text-slate-400">${camera.subtitle}</p>
+        </div>
+        <div class="text-xs ${camera.status === 'ONLINE' ? 'text-emerald-400' : 'text-slate-500'}">
+          ${camera.status}
+        </div>
+      </div>
+
+      <div class="bg-black aspect-video flex items-center justify-center">
+        ${
+          camera.status === 'ONLINE'
+            ? `<video id="video-${camera.id}" class="w-full h-full object-cover bg-black" autoplay muted controls playsinline></video>`
+            : `<div class="text-slate-500 text-sm">Cámara pendiente de configurar</div>`
+        }
+      </div>
+    `;
+
+    grid.appendChild(card);
+
+    if (camera.status === 'ONLINE') {
+      const video = document.getElementById(`video-${camera.id}`);
+
+      if (Hls.isSupported()) {
+        const hls = new Hls({ lowLatencyMode: true });
+        hls.loadSource(camera.stream);
+        hls.attachMedia(video);
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = camera.stream;
+      }
+    }
+  });
+</script>
+
+</body>
+</html>
