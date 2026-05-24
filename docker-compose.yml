@@ -1,0 +1,9 @@
+services:
+  alfgow-nvr:
+    build: .
+    container_name: alfgow-nvr
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
