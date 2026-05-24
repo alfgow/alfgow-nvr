@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: #030711;
+  --color-bg-surface: #0d1117;
+  --color-bg-card: #0d1117;
+  --color-border: #1e293b;
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-accent: #3b82f6;
+  --color-accent-glow: #60a5fa;
+  --color-status: #22c55e;
+  --color-rec: #ef4444;
+  --color-text-primary: #f1f5f9;
+  --color-text-muted: #64748b;
+  --font-family-sans: 'Inter', system-ui, sans-serif;
+}
+
+@keyframes pulse-rec {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes spin-loader {
+  to { transform: rotate(360deg); }
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-sans);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.rec-pulse {
+  animation: pulse-rec 1.4s ease-in-out infinite;
+}
+
+.modal-enter {
+  animation: fade-in 0.18s ease-out both;
+}
+
+.loader {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin-loader 0.7s linear infinite;
+}
+
+.card-glow:hover {
+  box-shadow: 0 0 0 1px var(--color-accent), 0 0 24px rgba(59, 130, 246, 0.12);
+}
