@@ -7,3 +7,107 @@ services:
       - "5000:5000"
     volumes:
       - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
+
+  ffmpeg-cam1:
+    image: linuxserver/ffmpeg:latest
+    container_name: ffmpeg-cam1
+    restart: unless-stopped
+    command: >
+      -rtsp_transport tcp
+      -i rtsp://admin:D210512d@192.168.0.122:554/Streaming/Channels/101
+      -an
+      -c:v libx264
+      -preset ultrafast
+      -tune zerolatency
+      -profile:v baseline
+      -level 3.1
+      -pix_fmt yuv420p
+      -b:v 1800k
+      -maxrate 2200k
+      -bufsize 3600k
+      -g 50
+      -f hls
+      -hls_time 2
+      -hls_list_size 5
+      -hls_flags delete_segments
+      /mnt/storage-alfgow/alfgow-nvr/live/cam1/index.m3u8
+    volumes:
+      - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
+
+  ffmpeg-cam2:
+    image: linuxserver/ffmpeg:latest
+    container_name: ffmpeg-cam2
+    restart: unless-stopped
+    command: >
+      -rtsp_transport tcp
+      -i rtsp://admin:D210512d@192.168.0.122:554/Streaming/Channels/201
+      -an
+      -c:v libx264
+      -preset ultrafast
+      -tune zerolatency
+      -profile:v baseline
+      -level 3.1
+      -pix_fmt yuv420p
+      -b:v 1800k
+      -maxrate 2200k
+      -bufsize 3600k
+      -g 50
+      -f hls
+      -hls_time 2
+      -hls_list_size 5
+      -hls_flags delete_segments
+      /mnt/storage-alfgow/alfgow-nvr/live/cam2/index.m3u8
+    volumes:
+      - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
+
+  ffmpeg-cam3:
+    image: linuxserver/ffmpeg:latest
+    container_name: ffmpeg-cam3
+    restart: unless-stopped
+    command: >
+      -rtsp_transport tcp
+      -i rtsp://admin:D210512d@192.168.0.122:554/Streaming/Channels/301
+      -an
+      -c:v libx264
+      -preset ultrafast
+      -tune zerolatency
+      -profile:v baseline
+      -level 3.1
+      -pix_fmt yuv420p
+      -b:v 1800k
+      -maxrate 2200k
+      -bufsize 3600k
+      -g 50
+      -f hls
+      -hls_time 2
+      -hls_list_size 5
+      -hls_flags delete_segments
+      /mnt/storage-alfgow/alfgow-nvr/live/cam3/index.m3u8
+    volumes:
+      - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
+
+  ffmpeg-cam4:
+    image: linuxserver/ffmpeg:latest
+    container_name: ffmpeg-cam4
+    restart: unless-stopped
+    command: >
+      -rtsp_transport tcp
+      -i rtsp://admin:D210512d@192.168.0.122:554/Streaming/Channels/401
+      -an
+      -c:v libx264
+      -preset ultrafast
+      -tune zerolatency
+      -profile:v baseline
+      -level 3.1
+      -pix_fmt yuv420p
+      -b:v 1800k
+      -maxrate 2200k
+      -bufsize 3600k
+      -g 50
+      -f hls
+      -hls_time 2
+      -hls_list_size 5
+      -hls_flags delete_segments
+      /mnt/storage-alfgow/alfgow-nvr/live/cam4/index.m3u8
+    volumes:
+      - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
