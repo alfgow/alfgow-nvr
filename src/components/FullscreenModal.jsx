@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Hls from 'hls.js'
+import { hlsOptions, keepNearLiveEdge } from '../config/hls'
 
 export default function FullscreenModal({ camera, onClose }) {
   const videoRef = useRef(null)
@@ -17,9 +18,10 @@ export default function FullscreenModal({ camera, onClose }) {
     if (!video) return
 
     if (Hls.isSupported()) {
-      const hls = new Hls({ lowLatencyMode: true })
+      const hls = new Hls(hlsOptions)
       hls.loadSource(camera.stream)
       hls.attachMedia(video)
+      hls.on(Hls.Events.FRAG_LOADED, () => keepNearLiveEdge(video, hls))
       return () => hls.destroy()
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = camera.stream

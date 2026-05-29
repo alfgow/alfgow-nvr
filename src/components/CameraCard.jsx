@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import Hls from 'hls.js'
+import { hlsOptions, keepNearLiveEdge } from '../config/hls'
 
 export default function CameraCard({ camera, onSelect }) {
   const videoRef = useRef(null)
@@ -16,11 +17,12 @@ export default function CameraCard({ camera, onSelect }) {
     setError(false)
 
     if (Hls.isSupported()) {
-      const hls = new Hls({ lowLatencyMode: true })
+      const hls = new Hls(hlsOptions)
       hlsRef.current = hls
       hls.loadSource(camera.stream)
       hls.attachMedia(video)
       hls.on(Hls.Events.MANIFEST_PARSED, () => setLoading(false))
+      hls.on(Hls.Events.FRAG_LOADED, () => keepNearLiveEdge(video, hls))
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) setError(true)
       })

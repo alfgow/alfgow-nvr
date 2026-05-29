@@ -18,6 +18,7 @@ services:
     restart: unless-stopped
     command: >
       -rtsp_transport tcp
+      -fflags nobuffer
       -i rtsp://admin:D210512d@192.168.0.122:554/Streaming/Channels/101
       -an
       -c:v libx264
@@ -28,12 +29,17 @@ services:
       -pix_fmt yuv420p
       -b:v 1800k
       -maxrate 2200k
-      -bufsize 3600k
-      -g 50
+      -bufsize 1800k
+      -g 25
+      -keyint_min 25
+      -sc_threshold 0
+      -bf 0
+      -force_key_frames 'expr:gte(t,n_forced*1)'
       -f hls
-      -hls_time 2
-      -hls_list_size 5
-      -hls_flags delete_segments
+      -hls_time 1
+      -hls_list_size 3
+      -hls_delete_threshold 1
+      -hls_flags delete_segments+independent_segments+omit_endlist
       /mnt/storage-alfgow/alfgow-nvr/live/cam1/index.m3u8
     volumes:
       - type: bind
@@ -48,6 +54,7 @@ services:
     restart: unless-stopped
     command: >
       -rtsp_transport tcp
+      -fflags nobuffer
       -i rtsp://admin:D210512d@192.168.0.122:554/Streaming/Channels/201
       -an
       -c:v libx264
@@ -58,12 +65,17 @@ services:
       -pix_fmt yuv420p
       -b:v 1800k
       -maxrate 2200k
-      -bufsize 3600k
-      -g 50
+      -bufsize 1800k
+      -g 25
+      -keyint_min 25
+      -sc_threshold 0
+      -bf 0
+      -force_key_frames 'expr:gte(t,n_forced*1)'
       -f hls
-      -hls_time 2
-      -hls_list_size 5
-      -hls_flags delete_segments
+      -hls_time 1
+      -hls_list_size 3
+      -hls_delete_threshold 1
+      -hls_flags delete_segments+independent_segments+omit_endlist
       /mnt/storage-alfgow/alfgow-nvr/live/cam2/index.m3u8
     volumes:
       - type: bind
@@ -78,6 +90,7 @@ services:
     restart: unless-stopped
     command: >
       -rtsp_transport tcp
+      -fflags nobuffer
       -i rtsp://admin:D210512d@192.168.0.122:554/Streaming/Channels/301
       -an
       -c:v libx264
@@ -88,12 +101,17 @@ services:
       -pix_fmt yuv420p
       -b:v 1800k
       -maxrate 2200k
-      -bufsize 3600k
-      -g 50
+      -bufsize 1800k
+      -g 25
+      -keyint_min 25
+      -sc_threshold 0
+      -bf 0
+      -force_key_frames 'expr:gte(t,n_forced*1)'
       -f hls
-      -hls_time 2
-      -hls_list_size 5
-      -hls_flags delete_segments
+      -hls_time 1
+      -hls_list_size 3
+      -hls_delete_threshold 1
+      -hls_flags delete_segments+independent_segments+omit_endlist
       /mnt/storage-alfgow/alfgow-nvr/live/cam3/index.m3u8
     volumes:
       - type: bind
@@ -108,6 +126,7 @@ services:
     restart: unless-stopped
     command: >
       -rtsp_transport tcp
+      -fflags nobuffer
       -i rtsp://admin:D210512d@192.168.0.122:554/Streaming/Channels/401
       -an
       -c:v libx264
@@ -118,12 +137,17 @@ services:
       -pix_fmt yuv420p
       -b:v 1800k
       -maxrate 2200k
-      -bufsize 3600k
-      -g 50
+      -bufsize 1800k
+      -g 25
+      -keyint_min 25
+      -sc_threshold 0
+      -bf 0
+      -force_key_frames 'expr:gte(t,n_forced*1)'
       -f hls
-      -hls_time 2
-      -hls_list_size 5
-      -hls_flags delete_segments
+      -hls_time 1
+      -hls_list_size 3
+      -hls_delete_threshold 1
+      -hls_flags delete_segments+independent_segments+omit_endlist
       /mnt/storage-alfgow/alfgow-nvr/live/cam4/index.m3u8
     volumes:
       - type: bind
