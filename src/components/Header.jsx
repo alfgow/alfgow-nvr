@@ -30,10 +30,10 @@ export default function Header({ cameraCount, activeView, onViewChange }) {
         top: 0,
         zIndex: 10,
       }}
-      className="px-6 py-4 flex items-center justify-between"
+      className="app-header"
     >
       {/* Logo */}
-      <div className="flex items-center">
+      <div className="header-logo">
         <img
           src="/logo.webp"
           alt="Alfgow NVR"
@@ -46,7 +46,7 @@ export default function Header({ cameraCount, activeView, onViewChange }) {
       </div>
 
       {/* Center — live indicator */}
-      <div className="flex items-center gap-3">
+      <div className="view-switcher">
         <button
           type="button"
           onClick={() => onViewChange('live')}

@@ -1,62 +1,161 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Hls from 'hls.js'
 
-const retentionDays = [
-  { id: 'today', label: 'Hoy' },
-  { id: 'yesterday', label: 'Ayer' },
-]
+function formatDateTimeLocal(date) {
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return offsetDate.toISOString().slice(0, 16)
+}
 
-const timelineHours = ['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00']
+function formatRangeDate(value) {
+  if (!value) return 'Sin datos'
+
+  return new Date(value).toLocaleString('es-ES', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
 
 export default function PlaybackView({ cameras }) {
+  const videoRef = useRef(null)
+  const hlsRef = useRef(null)
   const [selectedCameraId, setSelectedCameraId] = useState(cameras[0]?.id)
-  const [selectedDay, setSelectedDay] = useState(retentionDays[0].id)
-  const [selectedTime, setSelectedTime] = useState('Ahora')
+  const [selectedDateTime, setSelectedDateTime] = useState(formatDateTimeLocal(new Date()))
+  const [recording, setRecording] = useState({ loading: true, available: false, segments: [] })
+  const [error, setError] = useState('')
 
   const selectedCamera = useMemo(
     () => cameras.find((camera) => camera.id === selectedCameraId) ?? cameras[0],
     [cameras, selectedCameraId],
   )
 
+  const totalDuration = useMemo(
+    () => recording.segments?.reduce((total, segment) => total + segment.duration, 0) ?? 0,
+    [recording.segments],
+  )
+  const timelineOffset = getTimelineOffset()
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadRecording() {
+      setRecording({ loading: true, available: false, segments: [] })
+      setError('')
+
+      try {
+        const response = await fetch(`/api/recordings/${selectedCameraId}`)
+        if (!response.ok) throw new Error('No se pudo consultar la grabación')
+        const data = await response.json()
+        if (!cancelled) setRecording({ loading: false, ...data })
+      } catch (requestError) {
+        if (!cancelled) {
+          setRecording({ loading: false, available: false, segments: [] })
+          setError(requestError.message)
+        }
+      }
+    }
+
+    loadRecording()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedCameraId])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !recording.available || !recording.playlistUrl) {
+      if (hlsRef.current) {
+        hlsRef.current.destroy()
+        hlsRef.current = null
+      }
+      return
+    }
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy()
+      hlsRef.current = null
+    }
+
+    const playlistUrl = `${recording.playlistUrl}?t=${Date.now()}`
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({ lowLatencyMode: false, backBufferLength: 120, maxBufferLength: 120 })
+      hlsRef.current = hls
+      hls.loadSource(playlistUrl)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => seekToSelectedTime())
+      return () => hls.destroy()
+    }
+
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = playlistUrl
+      video.addEventListener('loadedmetadata', seekToSelectedTime, { once: true })
+      return () => video.removeEventListener('loadedmetadata', seekToSelectedTime)
+    }
+  }, [recording.available, recording.playlistUrl])
+
+  useEffect(() => {
+    seekToSelectedTime()
+  }, [selectedDateTime, recording.startTime, totalDuration])
+
+  function seekToSelectedTime() {
+    const video = videoRef.current
+    if (!video || !recording.startTime || !selectedDateTime || totalDuration <= 0) return
+
+    const start = new Date(recording.startTime).getTime()
+    const target = new Date(selectedDateTime).getTime()
+    if (!Number.isFinite(start) || !Number.isFinite(target)) return
+
+    const offsetSeconds = clamp((target - start) / 1000, 0, Math.max(totalDuration - 1, 0))
+    const seekableStart = video.seekable.length ? video.seekable.start(0) : 0
+    const seekableEnd = video.seekable.length ? video.seekable.end(video.seekable.length - 1) : totalDuration
+    video.currentTime = clamp(seekableStart + offsetSeconds, seekableStart, Math.max(seekableStart, seekableEnd - 1))
+  }
+
+  function jumpToNow() {
+    const value = formatDateTimeLocal(new Date())
+    setSelectedDateTime(value)
+  }
+
+  function jumpToYesterday() {
+    const date = new Date()
+    date.setDate(date.getDate() - 1)
+    setSelectedDateTime(formatDateTimeLocal(date))
+  }
+
+  function getTimelineOffset() {
+    if (!recording.startTime || !selectedDateTime) return 0
+
+    const start = new Date(recording.startTime).getTime()
+    const target = new Date(selectedDateTime).getTime()
+    if (!Number.isFinite(start) || !Number.isFinite(target)) return 0
+
+    return clamp((target - start) / 1000, 0, Math.max(totalDuration, 1))
+  }
+
   return (
-    <section style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 18, alignItems: 'start' }}>
-      <aside
-        style={{
-          background: 'var(--color-bg-card)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 16,
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{ padding: 16, borderBottom: '1px solid var(--color-border)' }}>
-          <p style={{ margin: 0, color: 'var(--color-text-primary)', fontWeight: 700, fontSize: 15 }}>
-            Reproducción
-          </p>
-          <p style={{ margin: '4px 0 0', color: 'var(--color-text-muted)', fontSize: 12 }}>
-            Retención local de los últimos 2 días
-          </p>
+    <section className="playback-layout">
+      <aside className="playback-panel">
+        <div className="playback-panel-header">
+          <p className="panel-title">Reproducción</p>
+          <p className="panel-subtitle">Grabaciones locales de las últimas 48h</p>
         </div>
 
-        <div style={{ padding: 14, display: 'grid', gap: 14 }}>
+        <div className="playback-controls">
           <div>
-            <label style={{ display: 'block', color: 'var(--color-text-muted)', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', marginBottom: 8 }}>
-              CÁMARA
-            </label>
-            <div style={{ display: 'grid', gap: 8 }}>
+            <label className="control-label">CÁMARA</label>
+            <div className="camera-picker">
               {cameras.map((camera) => (
                 <button
                   key={camera.id}
                   type="button"
                   onClick={() => setSelectedCameraId(camera.id)}
-                  style={{
-                    textAlign: 'left',
-                    color: selectedCamera?.id === camera.id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                    background: selectedCamera?.id === camera.id ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${selectedCamera?.id === camera.id ? 'rgba(59,130,246,0.35)' : 'var(--color-border)'}`,
-                    borderRadius: 10,
-                    padding: '10px 12px',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                  }}
+                  className={`picker-button ${selectedCamera?.id === camera.id ? 'is-active' : ''}`}
                 >
                   {camera.name}
                 </button>
@@ -65,140 +164,82 @@ export default function PlaybackView({ cameras }) {
           </div>
 
           <div>
-            <label style={{ display: 'block', color: 'var(--color-text-muted)', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', marginBottom: 8 }}>
-              DÍA
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {retentionDays.map((day) => (
-                <button
-                  key={day.id}
-                  type="button"
-                  onClick={() => setSelectedDay(day.id)}
-                  style={{
-                    color: selectedDay === day.id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                    background: selectedDay === day.id ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${selectedDay === day.id ? 'rgba(34,197,94,0.25)' : 'var(--color-border)'}`,
-                    borderRadius: 10,
-                    padding: '10px 12px',
-                    cursor: 'pointer',
-                    fontWeight: 700,
-                  }}
-                >
-                  {day.label}
-                </button>
-              ))}
+            <label className="control-label" htmlFor="playback-time">FECHA Y HORA</label>
+            <input
+              id="playback-time"
+              type="datetime-local"
+              value={selectedDateTime}
+              onChange={(event) => setSelectedDateTime(event.target.value)}
+              min={recording.startTime ? formatDateTimeLocal(new Date(recording.startTime)) : undefined}
+              max={recording.endTime ? formatDateTimeLocal(new Date(recording.endTime)) : undefined}
+              className="datetime-input"
+            />
+            <div className="quick-actions">
+              <button type="button" onClick={jumpToNow}>Ahora</button>
+              <button type="button" onClick={jumpToYesterday}>Hace 24h</button>
             </div>
+          </div>
+
+          <div className="availability-card">
+            <span>Disponible</span>
+            <strong>{formatRangeDate(recording.startTime)} — {formatRangeDate(recording.endTime)}</strong>
           </div>
         </div>
       </aside>
 
-      <div style={{ display: 'grid', gap: 16 }}>
-        <div
-          style={{
-            background: 'var(--color-bg-card)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 16,
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              padding: '12px 16px',
-              borderBottom: '1px solid var(--color-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
+      <div className="playback-main">
+        <div className="playback-player-card">
+          <div className="playback-card-header">
             <div>
-              <p style={{ margin: 0, color: 'var(--color-text-primary)', fontWeight: 700, fontSize: 14 }}>
-                {selectedCamera?.name}
-              </p>
-              <p style={{ margin: '3px 0 0', color: 'var(--color-text-muted)', fontSize: 12 }}>
-                {retentionDays.find((day) => day.id === selectedDay)?.label} · {selectedTime}
-              </p>
+              <p className="panel-title">{selectedCamera?.name}</p>
+              <p className="panel-subtitle">{selectedDateTime.replace('T', ' ')}</p>
             </div>
-            <span
-              style={{
-                color: 'var(--color-accent-glow)',
-                background: 'rgba(59,130,246,0.12)',
-                border: '1px solid rgba(59,130,246,0.35)',
-                borderRadius: 999,
-                padding: '5px 10px',
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: '0.08em',
-              }}
-            >
-              PLAYBACK
-            </span>
+            <span className="playback-badge">PLAYBACK</span>
           </div>
 
-          <div style={{ aspectRatio: '16/9', background: '#000', position: 'relative', display: 'grid', placeItems: 'center' }}>
-            <div style={{ textAlign: 'center', padding: 24 }}>
-              <div
-                style={{
-                  width: 54,
-                  height: 54,
-                  borderRadius: '50%',
-                  border: '1px solid rgba(255,255,255,0.16)',
-                  display: 'grid',
-                  placeItems: 'center',
-                  margin: '0 auto 14px',
-                  background: 'rgba(255,255,255,0.06)',
-                }}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="9 7 19 12 9 17 9 7" />
-                </svg>
+          <div className="playback-video-shell">
+            {recording.available ? (
+              <video
+                ref={videoRef}
+                controls
+                playsInline
+                className="playback-video"
+              />
+            ) : (
+              <div className="empty-playback">
+                <div className="empty-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M10 8l6 4-6 4V8z" />
+                  </svg>
+                </div>
+                <p>{recording.loading ? 'Buscando grabaciones…' : 'Todavía no hay grabaciones para esta cámara'}</p>
+                <span>{error || 'Las grabaciones aparecerán cuando los contenedores recorder estén activos.'}</span>
               </div>
-              <p style={{ margin: 0, color: 'var(--color-text-primary)', fontWeight: 700 }}>
-                Player de grabaciones
-              </p>
-              <p style={{ margin: '6px 0 0', color: 'var(--color-text-muted)', fontSize: 13 }}>
-                Aquí se reproducirán los clips guardados localmente cuando conectemos el índice de grabaciones.
-              </p>
-            </div>
+            )}
           </div>
         </div>
 
-        <div
-          style={{
-            background: 'var(--color-bg-card)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 16,
-            padding: 16,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <p style={{ margin: 0, color: 'var(--color-text-primary)', fontWeight: 700, fontSize: 14 }}>
-              Línea de tiempo
-            </p>
-            <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 12 }}>
-              Selección rápida por bloque horario
+        <div className="timeline-card">
+          <div>
+            <p className="panel-title">Línea de tiempo</p>
+            <p className="panel-subtitle">
+              {recording.segments?.length ? `${recording.segments.length} segmentos indexados` : 'Sin segmentos indexados'}
             </p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
-            {timelineHours.map((hour) => (
-              <button
-                key={hour}
-                type="button"
-                onClick={() => setSelectedTime(hour)}
-                style={{
-                  color: selectedTime === hour ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                  background: selectedTime === hour ? 'rgba(59,130,246,0.16)' : 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${selectedTime === hour ? 'rgba(59,130,246,0.45)' : 'var(--color-border)'}`,
-                  borderRadius: 10,
-                  padding: '12px 6px',
-                  cursor: 'pointer',
-                  fontWeight: 700,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {hour}
-              </button>
-            ))}
-          </div>
+          <input
+            type="range"
+            min="0"
+            max={Math.max(Math.round(totalDuration), 1)}
+            value={timelineOffset}
+            onChange={(event) => {
+              if (!recording.startTime) return
+              const date = new Date(new Date(recording.startTime).getTime() + Number(event.target.value) * 1000)
+              setSelectedDateTime(formatDateTimeLocal(date))
+            }}
+            className="timeline-range"
+            disabled={!recording.available}
+          />
         </div>
       </div>
     </section>

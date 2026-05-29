@@ -190,7 +190,7 @@ export default function CameraCard({ camera, onSelect }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: hovered ? 1 : 0,
+                opacity: hovered ? 1 : 0.75,
                 transition: 'opacity 0.18s ease',
               }}
               title="Ver en pantalla completa"

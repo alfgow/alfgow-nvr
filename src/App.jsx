@@ -18,7 +18,7 @@ export default function App() {
         activeView={activeView}
         onViewChange={setActiveView}
       />
-      <main className="p-6">
+      <main className="app-main">
         {activeView === 'live' ? (
           <CameraGrid cameras={cameras} onCameraSelect={setSelectedCamera} />
         ) : (
