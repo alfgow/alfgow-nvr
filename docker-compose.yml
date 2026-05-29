@@ -30,14 +30,14 @@ services:
       -b:v 1800k
       -maxrate 2200k
       -bufsize 1800k
-      -g 25
-      -keyint_min 25
+      -g 12
+      -keyint_min 12
       -sc_threshold 0
       -bf 0
-      -force_key_frames 'expr:gte(t,n_forced*1)'
+      -force_key_frames 'expr:gte(t,n_forced*0.5)'
       -f hls
-      -hls_time 1
-      -hls_list_size 3
+      -hls_time 0.5
+      -hls_list_size 2
       -hls_delete_threshold 1
       -hls_flags delete_segments+independent_segments+omit_endlist
       /mnt/storage-alfgow/alfgow-nvr/live/cam1/index.m3u8
@@ -66,14 +66,14 @@ services:
       -b:v 1800k
       -maxrate 2200k
       -bufsize 1800k
-      -g 25
-      -keyint_min 25
+      -g 12
+      -keyint_min 12
       -sc_threshold 0
       -bf 0
-      -force_key_frames 'expr:gte(t,n_forced*1)'
+      -force_key_frames 'expr:gte(t,n_forced*0.5)'
       -f hls
-      -hls_time 1
-      -hls_list_size 3
+      -hls_time 0.5
+      -hls_list_size 2
       -hls_delete_threshold 1
       -hls_flags delete_segments+independent_segments+omit_endlist
       /mnt/storage-alfgow/alfgow-nvr/live/cam2/index.m3u8
@@ -102,14 +102,14 @@ services:
       -b:v 1800k
       -maxrate 2200k
       -bufsize 1800k
-      -g 25
-      -keyint_min 25
+      -g 12
+      -keyint_min 12
       -sc_threshold 0
       -bf 0
-      -force_key_frames 'expr:gte(t,n_forced*1)'
+      -force_key_frames 'expr:gte(t,n_forced*0.5)'
       -f hls
-      -hls_time 1
-      -hls_list_size 3
+      -hls_time 0.5
+      -hls_list_size 2
       -hls_delete_threshold 1
       -hls_flags delete_segments+independent_segments+omit_endlist
       /mnt/storage-alfgow/alfgow-nvr/live/cam3/index.m3u8
@@ -138,14 +138,14 @@ services:
       -b:v 1800k
       -maxrate 2200k
       -bufsize 1800k
-      -g 25
-      -keyint_min 25
+      -g 12
+      -keyint_min 12
       -sc_threshold 0
       -bf 0
-      -force_key_frames 'expr:gte(t,n_forced*1)'
+      -force_key_frames 'expr:gte(t,n_forced*0.5)'
       -f hls
-      -hls_time 1
-      -hls_list_size 3
+      -hls_time 0.5
+      -hls_list_size 2
       -hls_delete_threshold 1
       -hls_flags delete_segments+independent_segments+omit_endlist
       /mnt/storage-alfgow/alfgow-nvr/live/cam4/index.m3u8

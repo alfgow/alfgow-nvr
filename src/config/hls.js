@@ -1,7 +1,7 @@
 export const hlsOptions = {
   lowLatencyMode: true,
   liveSyncDurationCount: 1,
-  liveMaxLatencyDurationCount: 3,
+  liveMaxLatencyDurationCount: 2,
   maxLiveSyncPlaybackRate: 1.5,
   backBufferLength: 0,
 }
@@ -11,7 +11,7 @@ export function keepNearLiveEdge(video, hls) {
   if (!liveSyncPosition || !Number.isFinite(video.currentTime)) return
 
   const latency = liveSyncPosition - video.currentTime
-  if (latency > 4) {
+  if (latency > 2) {
     video.currentTime = liveSyncPosition
   }
 }
