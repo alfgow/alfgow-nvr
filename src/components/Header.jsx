@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export default function Header({ cameraCount }) {
+export default function Header({ cameraCount, activeView, onViewChange }) {
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {
@@ -46,21 +46,48 @@ export default function Header({ cameraCount }) {
       </div>
 
       {/* Center — live indicator */}
-      <div className="flex items-center gap-2">
-        <span
-          className="rec-pulse"
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => onViewChange('live')}
+          className="text-sm font-medium"
           style={{
-            display: 'inline-block',
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background: 'var(--color-status)',
-            flexShrink: 0,
+            color: activeView === 'live' ? 'var(--color-status)' : 'var(--color-text-muted)',
+            background: activeView === 'live' ? 'rgba(34,197,94,0.1)' : 'transparent',
+            border: `1px solid ${activeView === 'live' ? 'rgba(34,197,94,0.25)' : 'var(--color-border)'}`,
+            borderRadius: 999,
+            padding: '7px 12px',
+            cursor: 'pointer',
           }}
-        />
-        <span className="text-sm font-medium" style={{ color: 'var(--color-status)' }}>
+        >
+          <span
+            className={activeView === 'live' ? 'rec-pulse' : ''}
+            style={{
+              display: 'inline-block',
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: activeView === 'live' ? 'var(--color-status)' : 'var(--color-text-muted)',
+              marginRight: 7,
+            }}
+          />
           {cameraCount} cam{cameraCount !== 1 ? 's' : ''} ONLINE
-        </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange('playback')}
+          className="text-sm font-medium"
+          style={{
+            color: activeView === 'playback' ? 'var(--color-accent-glow)' : 'var(--color-text-muted)',
+            background: activeView === 'playback' ? 'rgba(59,130,246,0.12)' : 'transparent',
+            border: `1px solid ${activeView === 'playback' ? 'rgba(59,130,246,0.35)' : 'var(--color-border)'}`,
+            borderRadius: 999,
+            padding: '7px 12px',
+            cursor: 'pointer',
+          }}
+        >
+          Historial 48h
+        </button>
       </div>
 
       {/* Clock */}
