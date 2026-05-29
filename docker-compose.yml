@@ -6,7 +6,11 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
+      - type: bind
+        source: /mnt/storage-alfgow/alfgow-nvr
+        target: /mnt/storage-alfgow/alfgow-nvr
+        bind:
+          propagation: rshared
 
   ffmpeg-cam1:
     image: linuxserver/ffmpeg:latest
@@ -32,7 +36,11 @@ services:
       -hls_flags delete_segments
       /mnt/storage-alfgow/alfgow-nvr/live/cam1/index.m3u8
     volumes:
-      - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
+      - type: bind
+        source: /mnt/storage-alfgow/alfgow-nvr
+        target: /mnt/storage-alfgow/alfgow-nvr
+        bind:
+          propagation: rshared
 
   ffmpeg-cam2:
     image: linuxserver/ffmpeg:latest
@@ -58,7 +66,11 @@ services:
       -hls_flags delete_segments
       /mnt/storage-alfgow/alfgow-nvr/live/cam2/index.m3u8
     volumes:
-      - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
+      - type: bind
+        source: /mnt/storage-alfgow/alfgow-nvr
+        target: /mnt/storage-alfgow/alfgow-nvr
+        bind:
+          propagation: rshared
 
   ffmpeg-cam3:
     image: linuxserver/ffmpeg:latest
@@ -84,7 +96,11 @@ services:
       -hls_flags delete_segments
       /mnt/storage-alfgow/alfgow-nvr/live/cam3/index.m3u8
     volumes:
-      - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
+      - type: bind
+        source: /mnt/storage-alfgow/alfgow-nvr
+        target: /mnt/storage-alfgow/alfgow-nvr
+        bind:
+          propagation: rshared
 
   ffmpeg-cam4:
     image: linuxserver/ffmpeg:latest
@@ -110,4 +126,8 @@ services:
       -hls_flags delete_segments
       /mnt/storage-alfgow/alfgow-nvr/live/cam4/index.m3u8
     volumes:
-      - /mnt/storage-alfgow/alfgow-nvr:/mnt/storage-alfgow/alfgow-nvr
+      - type: bind
+        source: /mnt/storage-alfgow/alfgow-nvr
+        target: /mnt/storage-alfgow/alfgow-nvr
+        bind:
+          propagation: rshared
