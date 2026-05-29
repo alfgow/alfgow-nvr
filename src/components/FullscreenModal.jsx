@@ -71,7 +71,7 @@ export default function FullscreenModal({ camera, onClose }) {
               {camera.name}
             </p>
             <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
-              {camera.subtitle} · Vista completa
+              Vista completa
             </p>
           </div>
 

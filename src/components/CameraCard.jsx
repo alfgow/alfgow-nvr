@@ -64,9 +64,6 @@ export default function CameraCard({ camera, onSelect }) {
           <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)', margin: 0 }}>
             {camera.name}
           </p>
-          <p className="text-xs" style={{ color: 'var(--color-text-muted)', margin: 0, marginTop: 1 }}>
-            {camera.subtitle}
-          </p>
         </div>
         <span
           style={{
