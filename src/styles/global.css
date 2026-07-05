@@ -59,7 +59,7 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 24px;
+  padding: 10px 20px;
 }
 
 .app-main {
@@ -71,7 +71,7 @@ input {
 
 .app-main--playback {
   overflow: hidden;
-  padding: 16px 24px 16px;
+  padding: 12px 20px 14px;
 }
 
 .header-logo {
@@ -193,8 +193,8 @@ input {
 
 .playback-layout {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 14px;
   align-items: stretch;
   height: 100%;
   min-height: 0;
@@ -203,10 +203,11 @@ input {
 
 .playback-panel,
 .playback-player-card,
+.playback-toolbar,
 .timeline-card {
-  background: var(--color-bg-card);
+  background: rgba(13, 17, 23, 0.92);
   border: 1px solid var(--color-border);
-  border-radius: 16px;
+  border-radius: 12px;
 }
 
 .playback-panel {
@@ -217,17 +218,19 @@ input {
   overflow: hidden;
 }
 
-.playback-panel-header,
-.playback-card-header {
+.playback-panel-header {
   border-bottom: 1px solid var(--color-border);
-  padding: 16px;
+  padding: 14px;
 }
 
-.playback-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.playback-kicker {
+  color: var(--color-accent-glow);
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  margin-bottom: 7px;
+  text-transform: uppercase;
 }
 
 .panel-title {
@@ -244,12 +247,30 @@ input {
 }
 
 .playback-controls {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 14px;
+}
+
+.control-group {
+  display: grid;
+  gap: 8px;
+}
+
+.control-group-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.control-group-header span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .control-label {
@@ -257,8 +278,9 @@ input {
   display: block;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  margin-bottom: 8px;
+  letter-spacing: 0.06em;
+  margin: 0;
+  text-transform: uppercase;
 }
 
 .camera-picker {
@@ -273,12 +295,24 @@ input {
 }
 
 .picker-button {
+  align-items: center;
   background: rgba(255, 255, 255, 0.02);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--color-text-muted);
+  display: flex;
   font-weight: 600;
-  padding: 10px 12px;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 8px 10px;
   text-align: left;
+}
+
+.picker-button small {
+  color: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
 .picker-button.is-active {
@@ -291,34 +325,35 @@ input {
   appearance: none;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--color-text-primary);
   outline: none;
-  padding: 11px 12px;
+  padding: 9px 10px;
   width: 100%;
 }
 
 .quick-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 8px;
-  margin-top: 8px;
 }
 
 .quick-actions button {
   background: rgba(255, 255, 255, 0.03);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--color-text-muted);
   font-weight: 700;
-  padding: 10px 12px;
+  min-height: 38px;
+  padding: 9px 12px;
+  white-space: nowrap;
 }
 
 .availability-card {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: 10px;
   display: grid;
-  gap: 4px;
+  gap: 5px;
+  margin-top: auto;
   padding: 12px;
 }
 
@@ -334,23 +369,83 @@ input {
   color: var(--color-text-primary);
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.35;
+}
+
+.availability-card small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .playback-main {
   display: grid;
-  gap: 16px;
-  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.playback-player-card {
+.playback-toolbar {
+  align-items: center;
   display: flex;
-  flex-direction: column;
+  gap: 16px;
+  justify-content: space-between;
+  min-height: 70px;
+  padding: 12px 14px;
+}
+
+.playback-heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.playback-heading h1 {
+  color: var(--color-text-primary);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.playback-heading p {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.playback-time-controls {
+  align-items: flex-end;
+  display: flex;
+  gap: 10px;
+}
+
+.datetime-field {
+  color: var(--color-text-muted);
+  display: grid;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.datetime-field .datetime-input {
+  min-width: 220px;
+}
+
+.playback-player-card {
+  align-items: center;
+  background: #05070d;
+  display: flex;
   height: 100%;
+  justify-content: center;
   min-height: 0;
   overflow: hidden;
+  padding: 10px;
 }
 
 .playback-badge {
@@ -366,9 +461,13 @@ input {
 
 .playback-video-shell {
   background: #000;
-  flex: 1 1 auto;
+  border-radius: 10px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+  height: 100%;
+  width: 100%;
   min-height: 0;
   display: grid;
+  overflow: hidden;
   place-items: center;
   position: relative;
 }
@@ -378,6 +477,30 @@ input {
   height: 100%;
   object-fit: contain;
   width: 100%;
+}
+
+.playback-video-overlay {
+  align-items: center;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.68), rgba(0, 0, 0, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 14px;
+  left: 12px;
+  max-width: calc(100% - 24px);
+  padding: 7px 10px;
+  pointer-events: none;
+  position: absolute;
+  top: 12px;
+}
+
+.playback-video-overlay time {
+  color: rgba(255, 255, 255, 0.68);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .empty-playback {
@@ -413,12 +536,28 @@ input {
 
 .timeline-card {
   display: grid;
-  gap: 14px;
-  padding: 16px;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.timeline-header {
+  align-items: end;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.timeline-header > span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .timeline-range {
   accent-color: var(--color-accent);
+  height: 6px;
   width: 100%;
 }
 
@@ -441,6 +580,25 @@ input {
 
 .card-glow:hover {
   box-shadow: 0 0 0 1px var(--color-accent), 0 0 24px rgba(59, 130, 246, 0.12);
+}
+
+@media (max-width: 1080px) {
+  .playback-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .playback-time-controls {
+    width: 100%;
+  }
+
+  .datetime-field {
+    flex: 1 1 auto;
+  }
+
+  .datetime-field .datetime-input {
+    min-width: 0;
+  }
 }
 
 @media (max-width: 760px) {
@@ -480,10 +638,19 @@ input {
     padding: 12px;
   }
 
+  .app-main--playback {
+    overflow: auto;
+  }
+
   .camera-grid,
   .playback-layout {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  .playback-layout {
+    height: auto;
+    overflow: visible;
   }
 
   .playback-panel {
@@ -493,16 +660,26 @@ input {
 
   .playback-main {
     order: 1;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto minmax(260px, 46dvh) auto;
+    overflow: visible;
   }
 
   .playback-controls {
     overflow: visible;
   }
 
-  .playback-card-header {
-    align-items: flex-start;
+  .playback-toolbar {
     padding: 12px;
+  }
+
+  .playback-time-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .playback-panel-header,
@@ -519,5 +696,15 @@ input {
   .quick-actions button,
   .datetime-input {
     min-height: 44px;
+  }
+
+  .timeline-header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .timeline-header > span {
+    text-align: left;
+    white-space: normal;
   }
 }

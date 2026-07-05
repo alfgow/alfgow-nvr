@@ -50,6 +50,9 @@ export default function PlaybackView({ cameras }) {
       try {
         const response = await fetch(`/api/recordings/${selectedCameraId}`)
         if (!response.ok) throw new Error('No se pudo consultar la grabación')
+        if (!response.headers.get('content-type')?.includes('application/json')) {
+          throw new Error('No se pudo consultar la grabación')
+        }
         const data = await response.json()
         if (!cancelled) setRecording({ loading: false, ...data })
       } catch (requestError) {
@@ -138,17 +141,24 @@ export default function PlaybackView({ cameras }) {
     return clamp((target - start) / 1000, 0, Math.max(totalDuration, 1))
   }
 
+  const segmentCount = recording.segments?.length ?? 0
+  const selectedDisplayTime = selectedDateTime ? selectedDateTime.replace('T', ' ') : 'Sin fecha'
+
   return (
     <section className="playback-layout">
       <aside className="playback-panel">
         <div className="playback-panel-header">
+          <span className="playback-kicker">Historial 48h</span>
           <p className="panel-title">Reproducción</p>
-          <p className="panel-subtitle">Grabaciones locales de las últimas 48h</p>
+          <p className="panel-subtitle">Grabaciones locales por cámara</p>
         </div>
 
         <div className="playback-controls">
-          <div>
-            <label className="control-label">CÁMARA</label>
+          <div className="control-group">
+            <div className="control-group-header">
+              <label className="control-label">Cámara</label>
+              <span>{cameras.length}</span>
+            </div>
             <div className="camera-picker">
               {cameras.map((camera) => (
                 <button
@@ -156,55 +166,68 @@ export default function PlaybackView({ cameras }) {
                   type="button"
                   onClick={() => setSelectedCameraId(camera.id)}
                   className={`picker-button ${selectedCamera?.id === camera.id ? 'is-active' : ''}`}
+                  aria-pressed={selectedCamera?.id === camera.id}
                 >
-                  {camera.name}
+                  <span>{camera.name}</span>
+                  <small>{camera.status}</small>
                 </button>
               ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="control-label" htmlFor="playback-time">FECHA Y HORA</label>
-            <input
-              id="playback-time"
-              type="datetime-local"
-              value={selectedDateTime}
-              onChange={(event) => setSelectedDateTime(event.target.value)}
-              min={recording.startTime ? formatDateTimeLocal(new Date(recording.startTime)) : undefined}
-              max={recording.endTime ? formatDateTimeLocal(new Date(recording.endTime)) : undefined}
-              className="datetime-input"
-            />
-            <div className="quick-actions">
-              <button type="button" onClick={jumpToNow}>Ahora</button>
-              <button type="button" onClick={jumpToYesterday}>Hace 24h</button>
             </div>
           </div>
 
           <div className="availability-card">
             <span>Disponible</span>
             <strong>{formatRangeDate(recording.startTime)} — {formatRangeDate(recording.endTime)}</strong>
+            <small>{segmentCount ? `${segmentCount} segmentos indexados` : 'Sin segmentos indexados'}</small>
           </div>
         </div>
       </aside>
 
       <div className="playback-main">
-        <div className="playback-player-card">
-          <div className="playback-card-header">
-            <div>
-              <p className="panel-title">{selectedCamera?.name}</p>
-              <p className="panel-subtitle">{selectedDateTime.replace('T', ' ')}</p>
-            </div>
+        <div className="playback-toolbar">
+          <div className="playback-heading">
             <span className="playback-badge">PLAYBACK</span>
+            <div>
+              <h1>{selectedCamera?.name}</h1>
+              <p>{selectedDisplayTime}</p>
+            </div>
           </div>
 
+          <div className="playback-time-controls">
+            <label className="datetime-field" htmlFor="playback-time">
+              <span>Fecha y hora</span>
+              <input
+                id="playback-time"
+                type="datetime-local"
+                value={selectedDateTime}
+                onChange={(event) => setSelectedDateTime(event.target.value)}
+                min={recording.startTime ? formatDateTimeLocal(new Date(recording.startTime)) : undefined}
+                max={recording.endTime ? formatDateTimeLocal(new Date(recording.endTime)) : undefined}
+                className="datetime-input"
+              />
+            </label>
+            <div className="quick-actions">
+              <button type="button" onClick={jumpToNow}>Ahora</button>
+              <button type="button" onClick={jumpToYesterday}>Hace 24h</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="playback-player-card">
           <div className="playback-video-shell">
             {recording.available ? (
-              <video
-                ref={videoRef}
-                controls
-                playsInline
-                className="playback-video"
-              />
+              <>
+                <video
+                  ref={videoRef}
+                  controls
+                  playsInline
+                  className="playback-video"
+                />
+                <div className="playback-video-overlay">
+                  <span>{selectedCamera?.name}</span>
+                  <time>{selectedDisplayTime}</time>
+                </div>
+              </>
             ) : (
               <div className="empty-playback">
                 <div className="empty-icon">
@@ -221,11 +244,14 @@ export default function PlaybackView({ cameras }) {
         </div>
 
         <div className="timeline-card">
-          <div>
-            <p className="panel-title">Línea de tiempo</p>
-            <p className="panel-subtitle">
-              {recording.segments?.length ? `${recording.segments.length} segmentos indexados` : 'Sin segmentos indexados'}
-            </p>
+          <div className="timeline-header">
+            <div>
+              <p className="panel-title">Línea de tiempo</p>
+              <p className="panel-subtitle">
+                {segmentCount ? `${segmentCount} segmentos indexados` : 'Sin segmentos indexados'}
+              </p>
+            </div>
+            <span>{formatRangeDate(recording.startTime)} — {formatRangeDate(recording.endTime)}</span>
           </div>
           <input
             type="range"

@@ -38,7 +38,7 @@ export default function Header({ cameraCount, activeView, onViewChange }) {
           src="/logo.webp"
           alt="Alfgow NVR"
           style={{
-            height: 52,
+            height: 44,
             width: 'auto',
             objectFit: 'contain',
           }}
