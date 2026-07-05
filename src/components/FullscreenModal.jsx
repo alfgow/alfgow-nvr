@@ -21,10 +21,20 @@ export default function FullscreenModal({ camera, onClose }) {
       const hls = new Hls(hlsOptions)
       hls.loadSource(camera.stream)
       hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {})
+      })
       hls.on(Hls.Events.FRAG_LOADED, () => keepNearLiveEdge(video, hls))
       return () => hls.destroy()
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = camera.stream
+      video.addEventListener(
+        'loadedmetadata',
+        () => {
+          video.play().catch(() => {})
+        },
+        { once: true }
+      )
     }
   }, [camera.stream])
 

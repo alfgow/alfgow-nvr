@@ -1,8 +1,8 @@
 export const hlsOptions = {
-  lowLatencyMode: true,
-  liveSyncDurationCount: 1,
-  liveMaxLatencyDurationCount: 2,
-  maxLiveSyncPlaybackRate: 1.5,
+  lowLatencyMode: false,
+  liveSyncDurationCount: 2,
+  liveMaxLatencyDurationCount: 4,
+  maxLiveSyncPlaybackRate: 1.25,
   backBufferLength: 0,
 }
 

@@ -12,13 +12,13 @@ export default function App() {
   const onlineCameras = cameras.filter((c) => c.status === 'ONLINE')
 
   return (
-    <div className="min-h-screen">
+    <div className="app-shell">
       <Header
         cameraCount={onlineCameras.length}
         activeView={activeView}
         onViewChange={setActiveView}
       />
-      <main className="app-main">
+      <main className={`app-main ${activeView === 'playback' ? 'app-main--playback' : ''}`}>
         {activeView === 'live' ? (
           <CameraGrid cameras={cameras} onCameraSelect={setSelectedCamera} />
         ) : (

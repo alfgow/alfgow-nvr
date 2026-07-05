@@ -12,6 +12,7 @@ const recordingsRoot = path.join(storageRoot, 'recordings')
 const cameraIds = ['cam1', 'cam2', 'cam3', 'cam4']
 
 for (const cameraId of cameraIds) {
+  fs.mkdirSync(path.join(liveRoot, cameraId), { recursive: true })
   fs.mkdirSync(path.join(recordingsRoot, cameraId), { recursive: true })
 }
 

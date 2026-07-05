@@ -47,6 +47,13 @@ input {
   font: inherit;
 }
 
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -56,7 +63,15 @@ input {
 }
 
 .app-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
   padding: 24px;
+}
+
+.app-main--playback {
+  overflow: hidden;
+  padding: 16px 24px 16px;
 }
 
 .header-logo {
@@ -76,11 +91,114 @@ input {
   gap: 20px;
 }
 
+.recordings-panel {
+  border-top: 1px solid var(--color-border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+}
+
+.recordings-panel-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+}
+
+.recordings-title {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.recordings-subtitle {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.recordings-download-all,
+.recording-download {
+  border: 1px solid rgba(59, 130, 246, 0.32);
+  border-radius: 999px;
+  color: var(--color-accent-glow);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  justify-content: center;
+  padding: 7px 10px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.recordings-download-all {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.recordings-body {
+  padding: 0 14px 14px;
+}
+
+.recordings-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  max-height: 250px;
+  overflow: auto;
+  padding: 0;
+}
+
+.recording-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.recording-row-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.recording-row-meta strong {
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.recording-row-meta span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.recordings-empty {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: flex;
+  justify-content: center;
+  min-height: 84px;
+  padding: 8px 0 2px;
+  text-align: center;
+}
+
+.recordings-empty p {
+  margin: 0;
+}
+
 .playback-layout {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .playback-panel,
@@ -92,6 +210,10 @@ input {
 }
 
 .playback-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -124,6 +246,9 @@ input {
 .playback-controls {
   display: grid;
   gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
   padding: 14px;
 }
 
@@ -214,10 +339,17 @@ input {
 .playback-main {
   display: grid;
   gap: 16px;
+  grid-template-rows: minmax(0, 1fr) auto;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .playback-player-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -233,8 +365,9 @@ input {
 }
 
 .playback-video-shell {
-  aspect-ratio: 16 / 9;
   background: #000;
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   place-items: center;
   position: relative;
@@ -355,10 +488,16 @@ input {
 
   .playback-panel {
     order: 2;
+    height: auto;
   }
 
   .playback-main {
     order: 1;
+    grid-template-rows: auto auto;
+  }
+
+  .playback-controls {
+    overflow: visible;
   }
 
   .playback-card-header {

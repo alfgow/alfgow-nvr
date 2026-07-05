@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Hls from 'hls.js'
 import { hlsOptions, keepNearLiveEdge } from '../config/hls'
 
@@ -8,6 +8,20 @@ export default function CameraCard({ camera, onSelect }) {
   const [loading, setLoading] = useState(true)
   const [hovered, setHovered] = useState(false)
   const [error, setError] = useState(false)
+  const [recordingsOpen, setRecordingsOpen] = useState(false)
+  const [recordings, setRecordings] = useState({ loading: false, available: false, segments: [] })
+  const [recordingsError, setRecordingsError] = useState('')
+
+  function formatRecordingTime(value) {
+    if (!value) return 'Sin fecha'
+
+    return new Date(value).toLocaleString('es-ES', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
 
   useEffect(() => {
     const video = videoRef.current
@@ -21,7 +35,10 @@ export default function CameraCard({ camera, onSelect }) {
       hlsRef.current = hls
       hls.loadSource(camera.stream)
       hls.attachMedia(video)
-      hls.on(Hls.Events.MANIFEST_PARSED, () => setLoading(false))
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setLoading(false)
+        video.play().catch(() => {})
+      })
       hls.on(Hls.Events.FRAG_LOADED, () => keepNearLiveEdge(video, hls))
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) setError(true)
@@ -32,11 +49,62 @@ export default function CameraCard({ camera, onSelect }) {
       }
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = camera.stream
-      const onLoad = () => setLoading(false)
+      const onLoad = () => {
+        setLoading(false)
+        video.play().catch(() => {})
+      }
       video.addEventListener('loadedmetadata', onLoad)
       return () => video.removeEventListener('loadedmetadata', onLoad)
     }
   }, [camera.stream, camera.status])
+
+  useEffect(() => {
+    if (!recordingsOpen || camera.status !== 'ONLINE') return
+
+    const controller = new AbortController()
+    let cancelled = false
+
+    async function loadRecordings() {
+      setRecordings((current) => ({ ...current, loading: true }))
+      setRecordingsError('')
+
+      try {
+        const response = await fetch(`/api/recordings/${camera.id}`, {
+          signal: controller.signal,
+        })
+
+        if (!response.ok) {
+          throw new Error('No se pudieron cargar las grabaciones')
+        }
+
+        const data = await response.json()
+        if (!cancelled) {
+          setRecordings({
+            loading: false,
+            available: data.available,
+            segments: data.segments ?? [],
+          })
+        }
+      } catch (fetchError) {
+        if (fetchError.name === 'AbortError') return
+
+        if (!cancelled) {
+          setRecordings({ loading: false, available: false, segments: [] })
+          setRecordingsError(fetchError.message)
+        }
+      }
+    }
+
+    loadRecordings()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [camera.id, camera.status, recordingsOpen])
+
+  const latestSegments = recordings.segments.slice(-8).reverse()
+  const manifestUrl = `/recordings/${camera.id}/index.m3u8`
 
   return (
     <div
@@ -175,9 +243,45 @@ export default function CameraCard({ camera, onSelect }) {
               </div>
             )}
 
+            {/* Recording button */}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                setRecordingsOpen((current) => !current)
+              }}
+              style={{
+                position: 'absolute',
+                top: 10,
+                right: 56,
+                background: recordingsOpen ? 'rgba(59,130,246,0.16)' : 'rgba(0,0,0,0.55)',
+                border: `1px solid ${recordingsOpen ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.12)'}`,
+                borderRadius: 7,
+                padding: '5px 8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: hovered ? 1 : 0.75,
+                transition: 'opacity 0.18s ease, background 0.18s ease, border-color 0.18s ease',
+                color: recordingsOpen ? 'var(--color-accent-glow)' : '#fff',
+              }}
+              title={recordingsOpen ? 'Ocultar grabaciones' : 'Ver grabaciones'}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5h16" />
+                <path d="M6 3.5h12l2 8-2 8H6l-2-8 2-8Z" />
+                <path d="M9 10h6" />
+              </svg>
+            </button>
+
             {/* Fullscreen button (top-right, on hover) */}
             <button
-              onClick={onSelect}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onSelect()
+              }}
               style={{
                 position: 'absolute',
                 top: 10,
@@ -238,6 +342,62 @@ export default function CameraCard({ camera, onSelect }) {
           </div>
         )}
       </div>
+
+      {recordingsOpen && camera.status === 'ONLINE' && (
+        <div className="recordings-panel">
+          <div className="recordings-panel-header">
+            <div>
+              <p className="recordings-title">Grabaciones</p>
+              <p className="recordings-subtitle">
+                {recordings.loading
+                  ? 'Cargando segmentos…'
+                  : recordings.available
+                    ? `${recordings.segments.length} segmentos disponibles`
+                    : 'No hay grabaciones indexadas todavía'}
+              </p>
+            </div>
+
+            <a className="recordings-download-all" href={manifestUrl} download>
+              Descargar índice
+            </a>
+          </div>
+
+          <div className="recordings-body">
+            {recordingsError ? (
+              <div className="recordings-empty">
+                <p>{recordingsError}</p>
+              </div>
+            ) : recordings.loading ? (
+              <div className="recordings-empty">
+                <div className="loader" />
+              </div>
+            ) : latestSegments.length ? (
+              <ul className="recordings-list">
+                {latestSegments.map((segment) => {
+                  const segmentUrl = `/recordings/${camera.id}/${segment.uri}`
+
+                  return (
+                    <li key={segment.uri} className="recording-row">
+                      <div className="recording-row-meta">
+                        <strong>{formatRecordingTime(segment.programDateTime)}</strong>
+                        <span>{segment.duration ? `${segment.duration.toFixed(0)} s` : 'Duración desconocida'}</span>
+                      </div>
+
+                      <a className="recording-download" href={segmentUrl} download>
+                        Descargar
+                      </a>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <div className="recordings-empty">
+                <p>Abre esta sección cuando el grabador haya generado segmentos.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
