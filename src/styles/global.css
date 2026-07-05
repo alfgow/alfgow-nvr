@@ -463,7 +463,7 @@ input {
   min-height: 0;
   overflow: hidden;
   padding: 14px;
-  width: min(100%, 650px);
+  width: min(100%, 760px);
 }
 
 .playback-badge {
@@ -478,15 +478,14 @@ input {
 }
 
 .playback-video-shell {
-  --playback-square-size: min(calc(88dvh - 270px), 600px);
+  --playback-video-height: min(calc(88dvh - 270px), 600px);
   background: #000;
-  aspect-ratio: 1 / 1;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   box-shadow:
     0 22px 48px rgba(0, 0, 0, 0.38),
     0 0 0 1px rgba(96, 165, 250, 0.08);
-  height: var(--playback-square-size);
+  height: var(--playback-video-height);
   max-height: 100%;
   max-width: 100%;
   min-height: 0;
@@ -494,13 +493,13 @@ input {
   overflow: hidden;
   place-items: center;
   position: relative;
-  width: var(--playback-square-size);
+  width: min(100%, calc(var(--playback-video-height) + 100px));
 }
 
 .playback-video {
   display: block;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   width: 100%;
 }
 
@@ -740,6 +739,6 @@ input {
   }
 
   .playback-video-shell {
-    --playback-square-size: min(calc(100vw - 96px), 420px);
+    --playback-video-height: min(calc(100vw - 96px), 420px);
   }
 }
