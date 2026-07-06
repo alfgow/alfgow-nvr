@@ -40,6 +40,7 @@ function clamp(value, min, max) {
 export default function PlaybackView({ cameras }) {
   const videoRef = useRef(null)
   const hlsRef = useRef(null)
+  const timelineSelectorRef = useRef(null)
   const [selectedCameraId, setSelectedCameraId] = useState(cameras[0]?.id)
   const [selectedDateTime, setSelectedDateTime] = useState(formatDateTimeLocal(new Date()))
   const [recording, setRecording] = useState({ loading: true, available: false, segments: [] })
@@ -140,7 +141,7 @@ export default function PlaybackView({ cameras }) {
     }
 
     setClipSelection({ start: duration - defaultDuration, end: duration })
-  }, [recording.available, recording.startTime, selectedDateTime, totalDuration])
+  }, [recording.available, recording.startTime, totalDuration])
 
   function seekToSelectedTime() {
     const video = videoRef.current
@@ -238,10 +239,12 @@ export default function PlaybackView({ cameras }) {
   }
 
   function updateClipStart(value) {
+    const start = clamp(Number(value), 0, Math.max(clipEnd - minClipDuration, 0))
     setClipSelection((current) => ({
       ...current,
-      start: clamp(Number(value), 0, Math.max(clipEnd - minClipDuration, 0)),
+      start,
     }))
+    seekToOffset(start)
   }
 
   function updateClipEnd(value) {
@@ -251,10 +254,59 @@ export default function PlaybackView({ cameras }) {
     }))
   }
 
-  function seekFromTimeline(value) {
+  function seekToOffset(value) {
     if (!recording.startTime) return
-    const date = new Date(new Date(recording.startTime).getTime() + Number(value) * 1000)
+    const date = new Date(new Date(recording.startTime).getTime() + value * 1000)
     setSelectedDateTime(formatDateTimeLocal(date))
+  }
+
+  function getTimelinePointerOffset(event) {
+    const timeline = timelineSelectorRef.current
+    if (!timeline) return 0
+
+    const rect = timeline.getBoundingClientRect()
+    if (!rect.width) return 0
+
+    const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1)
+    return Math.round(ratio * timelineMax)
+  }
+
+  function moveClipSelectionFromPointer(event, mode) {
+    const offset = getTimelinePointerOffset(event)
+
+    if (mode === 'start') {
+      updateClipStart(offset)
+      return
+    }
+
+    if (mode === 'end') {
+      updateClipEnd(offset)
+      return
+    }
+
+    const duration = clipDuration > 0 ? clipDuration : Math.min(timelineMax, 5 * 60)
+    const start = clamp(offset, 0, Math.max(timelineMax - duration, 0))
+    setClipSelection({ start, end: start + duration })
+    seekToOffset(start)
+  }
+
+  function startTimelineDrag(event, mode) {
+    if (!recording.available) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    moveClipSelectionFromPointer(event, mode)
+
+    function handlePointerMove(pointerEvent) {
+      moveClipSelectionFromPointer(pointerEvent, mode)
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener('pointermove', handlePointerMove)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp, { once: true })
   }
 
   return (
@@ -387,38 +439,27 @@ export default function PlaybackView({ cameras }) {
             </a>
           </div>
 
-          <div className="timeline-selector" style={timelineSelectionStyle}>
+          <div
+            className="timeline-selector"
+            ref={timelineSelectorRef}
+            style={timelineSelectionStyle}
+            onPointerDown={(event) => startTimelineDrag(event, 'range')}
+          >
             <div className="timeline-selector-track">
               <span className="timeline-selection-fill" />
               <span className="timeline-playhead-marker" />
             </div>
-            <input
-              type="range"
-              min="0"
-              max={timelineMax}
-              value={timelineOffset}
-              onChange={(event) => seekFromTimeline(event.target.value)}
-              className="timeline-seek-range"
-              disabled={!recording.available}
-              aria-label="Mover reproducción"
-            />
-            <input
-              type="range"
-              min="0"
-              max={timelineMax}
-              value={clipStart}
-              onChange={(event) => updateClipStart(event.target.value)}
+            <button
+              type="button"
               className="timeline-handle timeline-handle--start"
+              onPointerDown={(event) => startTimelineDrag(event, 'start')}
               disabled={!recording.available}
               aria-label="Inicio del clip"
             />
-            <input
-              type="range"
-              min="0"
-              max={timelineMax}
-              value={clipEnd}
-              onChange={(event) => updateClipEnd(event.target.value)}
+            <button
+              type="button"
               className="timeline-handle timeline-handle--end"
+              onPointerDown={(event) => startTimelineDrag(event, 'end')}
               disabled={!recording.available}
               aria-label="Fin del clip"
             />
