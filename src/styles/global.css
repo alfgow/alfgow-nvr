@@ -635,6 +635,8 @@ input {
   cursor: pointer;
   height: 30px;
   position: relative;
+  touch-action: none;
+  user-select: none;
 }
 
 .timeline-selector-track {
@@ -683,6 +685,12 @@ input {
   transform: translateX(-50%);
   width: 13px;
   z-index: 2;
+}
+
+.is-dragging-timeline,
+.is-dragging-timeline * {
+  cursor: ew-resize !important;
+  user-select: none !important;
 }
 
 .timeline-handle--start {

@@ -33,8 +33,82 @@ function formatDuration(value) {
   return `${seconds} s`
 }
 
+const playbackWindowSeconds = 48 * 60 * 60
+const defaultClipDurationSeconds = 5 * 60
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
+}
+
+function normalizeSegment(segment = {}) {
+  const duration = Number(segment.duration)
+
+  return {
+    ...segment,
+    duration: Number.isFinite(duration) && duration > 0 ? duration : 60,
+  }
+}
+
+function getSegmentStartMs(segment) {
+  return Date.parse(segment?.programDateTime)
+}
+
+function getSegmentEndMs(segment) {
+  const start = getSegmentStartMs(segment)
+  if (!Number.isFinite(start)) return Number.NaN
+
+  return start + normalizeSegment(segment).duration * 1000
+}
+
+function limitSegmentsByDuration(segments, maxDurationSeconds) {
+  const selected = []
+  let duration = 0
+
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index]
+    if (selected.length && duration + segment.duration > maxDurationSeconds) break
+
+    selected.push(segment)
+    duration += segment.duration
+  }
+
+  return selected.reverse()
+}
+
+function limitRecordingDataToPlaybackWindow(data) {
+  const segments = Array.isArray(data.segments)
+    ? data.segments
+      .map(normalizeSegment)
+      .filter((segment) => Number.isFinite(getSegmentStartMs(segment)))
+      .sort((first, second) => getSegmentStartMs(first) - getSegmentStartMs(second))
+    : []
+
+  if (!segments.length) {
+    return {
+      ...data,
+      available: false,
+      startTime: null,
+      endTime: null,
+      segments: [],
+    }
+  }
+
+  const newestEnd = segments.reduce((latest, segment) => Math.max(latest, getSegmentEndMs(segment)), 0)
+  const cutoff = newestEnd - playbackWindowSeconds * 1000
+  const windowSegments = segments.filter((segment) => {
+    const segmentStart = getSegmentStartMs(segment)
+    return segmentStart >= cutoff && segmentStart <= newestEnd
+  })
+  const retainedSegments = limitSegmentsByDuration(windowSegments, playbackWindowSeconds)
+  const lastSegment = retainedSegments.at(-1)
+
+  return {
+    ...data,
+    available: retainedSegments.length > 0,
+    startTime: retainedSegments[0]?.programDateTime ?? null,
+    endTime: lastSegment ? formatDateTimeQuery(new Date(getSegmentEndMs(lastSegment))) : null,
+    segments: retainedSegments,
+  }
 }
 
 export default function PlaybackView({ cameras }) {
@@ -46,6 +120,7 @@ export default function PlaybackView({ cameras }) {
   const [recording, setRecording] = useState({ loading: true, available: false, segments: [] })
   const [error, setError] = useState('')
   const [clipSelection, setClipSelection] = useState({ start: 0, end: 0 })
+  const clipSelectionRef = useRef(clipSelection)
 
   const selectedCamera = useMemo(
     () => cameras.find((camera) => camera.id === selectedCameraId) ?? cameras[0],
@@ -57,6 +132,10 @@ export default function PlaybackView({ cameras }) {
     [recording.segments],
   )
   const timelineOffset = getTimelineOffset()
+
+  useEffect(() => {
+    clipSelectionRef.current = clipSelection
+  }, [clipSelection])
 
   useEffect(() => {
     let cancelled = false
@@ -71,7 +150,7 @@ export default function PlaybackView({ cameras }) {
         if (!response.headers.get('content-type')?.includes('application/json')) {
           throw new Error('No se pudo consultar la grabación')
         }
-        const data = await response.json()
+        const data = limitRecordingDataToPlaybackWindow(await response.json())
         if (!cancelled) setRecording({ loading: false, ...data })
       } catch (requestError) {
         if (!cancelled) {
@@ -102,7 +181,8 @@ export default function PlaybackView({ cameras }) {
       hlsRef.current = null
     }
 
-    const playlistUrl = `${recording.playlistUrl}?t=${Date.now()}`
+    const playlistSeparator = recording.playlistUrl.includes('?') ? '&' : '?'
+    const playlistUrl = `${recording.playlistUrl}${playlistSeparator}window=48h&t=${Date.now()}`
 
     if (Hls.isSupported()) {
       const hls = new Hls({ lowLatencyMode: false, backBufferLength: 120, maxBufferLength: 120 })
@@ -110,7 +190,12 @@ export default function PlaybackView({ cameras }) {
       hls.loadSource(playlistUrl)
       hls.attachMedia(video)
       hls.on(Hls.Events.MANIFEST_PARSED, () => seekToSelectedTime())
-      return () => hls.destroy()
+      video.addEventListener('loadedmetadata', seekToSelectedTime)
+      return () => {
+        video.removeEventListener('loadedmetadata', seekToSelectedTime)
+        hls.destroy()
+        if (hlsRef.current === hls) hlsRef.current = null
+      }
     }
 
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -125,36 +210,38 @@ export default function PlaybackView({ cameras }) {
   }, [selectedDateTime, recording.startTime, totalDuration])
 
   useEffect(() => {
+    if (!recording.available || !recording.startTime || !recording.endTime) return
+
+    const clampedDateTime = clampPlaybackDateTime(selectedDateTime)
+    if (clampedDateTime !== selectedDateTime) {
+      setSelectedDateTime(clampedDateTime)
+    }
+  }, [recording.available, recording.startTime, recording.endTime, selectedDateTime])
+
+  useEffect(() => {
     const duration = Math.max(Math.round(totalDuration), 0)
     if (!recording.available || duration <= 0) {
-      setClipSelection({ start: 0, end: 0 })
+      applyClipSelection({ start: 0, end: 0 })
       return
     }
 
-    const defaultDuration = Math.min(duration, 5 * 60)
+    const defaultDuration = Math.min(duration, defaultClipDurationSeconds)
     const selectedOffset = getOffsetSeconds(selectedDateTime)
 
     if (Number.isFinite(selectedOffset) && selectedOffset >= 0 && selectedOffset <= duration) {
       const start = clamp(selectedOffset, 0, Math.max(duration - defaultDuration, 0))
-      setClipSelection({ start, end: start + defaultDuration })
+      applyClipSelection({ start, end: start + defaultDuration })
       return
     }
 
-    setClipSelection({ start: duration - defaultDuration, end: duration })
+    applyClipSelection({ start: duration - defaultDuration, end: duration })
   }, [recording.available, recording.startTime, totalDuration])
 
   function seekToSelectedTime() {
-    const video = videoRef.current
-    if (!video || !recording.startTime || !selectedDateTime || totalDuration <= 0) return
+    if (!recording.available || !selectedDateTime || totalDuration <= 0) return
 
-    const start = new Date(recording.startTime).getTime()
-    const target = new Date(selectedDateTime).getTime()
-    if (!Number.isFinite(start) || !Number.isFinite(target)) return
-
-    const offsetSeconds = clamp((target - start) / 1000, 0, Math.max(totalDuration - 1, 0))
-    const seekableStart = video.seekable.length ? video.seekable.start(0) : 0
-    const seekableEnd = video.seekable.length ? video.seekable.end(video.seekable.length - 1) : totalDuration
-    video.currentTime = clamp(seekableStart + offsetSeconds, seekableStart, Math.max(seekableStart, seekableEnd - 1))
+    const offsetSeconds = getOffsetSeconds(selectedDateTime)
+    if (Number.isFinite(offsetSeconds)) seekVideoToOffset(offsetSeconds)
   }
 
   function jumpToNow() {
@@ -169,13 +256,10 @@ export default function PlaybackView({ cameras }) {
   }
 
   function getTimelineOffset() {
-    if (!recording.startTime || !selectedDateTime) return 0
+    const offset = getOffsetSeconds(selectedDateTime)
+    if (!Number.isFinite(offset)) return 0
 
-    const start = new Date(recording.startTime).getTime()
-    const target = new Date(selectedDateTime).getTime()
-    if (!Number.isFinite(start) || !Number.isFinite(target)) return 0
-
-    return clamp((target - start) / 1000, 0, Math.max(totalDuration, 1))
+    return clamp(offset, 0, Math.max(totalDuration, 1))
   }
 
   const segmentCount = recording.segments?.length ?? 0
@@ -206,25 +290,72 @@ export default function PlaybackView({ cameras }) {
   }
 
   function getClipDate(offsetSeconds) {
-    if (!recording.startTime) return null
-    const start = new Date(recording.startTime).getTime()
-    if (!Number.isFinite(start)) return null
-    return new Date(start + offsetSeconds * 1000)
+    return getDateForMediaOffset(offsetSeconds)
   }
 
   function getOffsetSeconds(value) {
-    if (!recording.startTime || !value) return Number.NaN
+    if (!recording.segments?.length || !value) return Number.NaN
 
-    const start = new Date(recording.startTime).getTime()
     const target = new Date(value).getTime()
-    if (!Number.isFinite(start) || !Number.isFinite(target)) return Number.NaN
+    if (!Number.isFinite(target)) return Number.NaN
 
-    return (target - start) / 1000
+    let elapsed = 0
+
+    for (const segment of recording.segments) {
+      const start = getSegmentStartMs(segment)
+      const duration = Number(segment.duration) || 0
+      if (!Number.isFinite(start) || duration <= 0) continue
+
+      const end = start + duration * 1000
+      if (target <= start) return elapsed
+      if (target < end) return elapsed + (target - start) / 1000
+
+      elapsed += duration
+    }
+
+    return clamp(elapsed, 0, Math.max(totalDuration, 0))
+  }
+
+  function getDateForMediaOffset(offsetSeconds) {
+    if (!recording.segments?.length) return null
+
+    const targetOffset = clamp(Number(offsetSeconds) || 0, 0, Math.max(totalDuration, 0))
+    let elapsed = 0
+
+    for (const segment of recording.segments) {
+      const start = getSegmentStartMs(segment)
+      const duration = Number(segment.duration) || 0
+      if (!Number.isFinite(start) || duration <= 0) continue
+
+      const nextElapsed = elapsed + duration
+      if (targetOffset <= nextElapsed) {
+        return new Date(start + clamp(targetOffset - elapsed, 0, duration) * 1000)
+      }
+
+      elapsed = nextElapsed
+    }
+
+    return recording.endTime ? new Date(recording.endTime) : null
+  }
+
+  function clampPlaybackDateTime(value) {
+    if (!recording.startTime || !recording.endTime || !value) return value
+
+    const target = Date.parse(value)
+    const start = Date.parse(recording.startTime)
+    const end = Date.parse(recording.endTime)
+    if (!Number.isFinite(target) || !Number.isFinite(start) || !Number.isFinite(end)) return value
+
+    return formatDateTimeLocal(new Date(clamp(target, start, end)))
   }
 
   function setPlaybackDateTime(value) {
-    setSelectedDateTime(value)
-    syncClipSelectionToDateTime(value)
+    const nextValue = clampPlaybackDateTime(value)
+    const offset = getOffsetSeconds(nextValue)
+
+    setSelectedDateTime(nextValue)
+    syncClipSelectionToDateTime(nextValue)
+    if (Number.isFinite(offset)) seekVideoToOffset(offset)
   }
 
   function syncClipSelectionToDateTime(value) {
@@ -233,31 +364,67 @@ export default function PlaybackView({ cameras }) {
     const targetOffset = getOffsetSeconds(value)
     if (!Number.isFinite(targetOffset)) return
 
-    const duration = clipDuration > 0 ? clipDuration : Math.min(timelineMax, 5 * 60)
+    const current = getCurrentClipSelection()
+    const currentDuration = current.end - current.start
+    const duration = currentDuration > 0 ? currentDuration : Math.min(timelineMax, defaultClipDurationSeconds)
     const start = clamp(targetOffset, 0, Math.max(timelineMax - duration, 0))
-    setClipSelection({ start, end: start + duration })
+    applyClipSelection({ start, end: start + duration })
   }
 
   function updateClipStart(value) {
-    const start = clamp(Number(value), 0, Math.max(clipEnd - minClipDuration, 0))
-    setClipSelection((current) => ({
-      ...current,
-      start,
-    }))
+    const current = getCurrentClipSelection()
+    const start = clamp(Math.round(Number(value) || 0), 0, Math.max(current.end - minClipDuration, 0))
+    applyClipSelection({ start, end: current.end })
     seekToOffset(start)
   }
 
   function updateClipEnd(value) {
-    setClipSelection((current) => ({
-      ...current,
-      end: clamp(Number(value), clipStart + minClipDuration, timelineMax),
-    }))
+    const current = getCurrentClipSelection()
+    const end = clamp(Math.round(Number(value) || 0), current.start + minClipDuration, timelineMax)
+    applyClipSelection({ start: current.start, end })
   }
 
   function seekToOffset(value) {
-    if (!recording.startTime) return
-    const date = new Date(new Date(recording.startTime).getTime() + value * 1000)
-    setSelectedDateTime(formatDateTimeLocal(date))
+    const offset = clamp(Math.round(Number(value) || 0), 0, Math.max(timelineMax, 0))
+    const date = getClipDate(offset)
+    if (date) setSelectedDateTime(formatDateTimeLocal(date))
+    seekVideoToOffset(offset)
+  }
+
+  function seekVideoToOffset(value) {
+    const video = videoRef.current
+    if (!video || totalDuration <= 0) return
+
+    const mediaDuration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : totalDuration
+    video.currentTime = clamp(Number(value) || 0, 0, Math.max(mediaDuration - 1, 0))
+  }
+
+  function applyClipSelection(selection) {
+    const nextSelection = {
+      start: Number(selection.start) || 0,
+      end: Number(selection.end) || 0,
+    }
+
+    clipSelectionRef.current = nextSelection
+    setClipSelection(nextSelection)
+  }
+
+  function getCurrentClipSelection() {
+    if (!recording.available || timelineMax <= 0) return { start: 0, end: 0 }
+
+    const current = clipSelectionRef.current
+    let start = clamp(Math.round(Number(current.start) || 0), 0, timelineMax)
+    let end = clamp(Math.round(Number(current.end) || 0), minClipDuration, timelineMax)
+
+    if (end - start < minClipDuration) {
+      if (start + minClipDuration <= timelineMax) {
+        end = start + minClipDuration
+      } else {
+        start = Math.max(end - minClipDuration, 0)
+      }
+    }
+
+    return { start, end }
   }
 
   function getTimelinePointerOffset(event) {
@@ -284,9 +451,11 @@ export default function PlaybackView({ cameras }) {
       return
     }
 
-    const duration = clipDuration > 0 ? clipDuration : Math.min(timelineMax, 5 * 60)
+    const current = getCurrentClipSelection()
+    const currentDuration = current.end - current.start
+    const duration = currentDuration > 0 ? currentDuration : Math.min(timelineMax, defaultClipDurationSeconds)
     const start = clamp(offset, 0, Math.max(timelineMax - duration, 0))
-    setClipSelection({ start, end: start + duration })
+    applyClipSelection({ start, end: start + duration })
     seekToOffset(start)
   }
 
@@ -295,18 +464,35 @@ export default function PlaybackView({ cameras }) {
 
     event.preventDefault()
     event.stopPropagation()
+    const dragTarget = event.currentTarget
+    try {
+      dragTarget.setPointerCapture?.(event.pointerId)
+    } catch {
+      // Some browsers reject capture if the pointer is already gone.
+    }
+    document.body.classList.add('is-dragging-timeline')
     moveClipSelectionFromPointer(event, mode)
 
     function handlePointerMove(pointerEvent) {
+      pointerEvent.preventDefault()
       moveClipSelectionFromPointer(pointerEvent, mode)
     }
 
-    function handlePointerUp() {
-      window.removeEventListener('pointermove', handlePointerMove)
+    function handlePointerUp(pointerEvent) {
+      try {
+        dragTarget.releasePointerCapture?.(pointerEvent.pointerId)
+      } catch {
+        // Cleanup should continue even if pointer capture was not active.
+      }
+      document.removeEventListener('pointermove', handlePointerMove)
+      document.removeEventListener('pointerup', handlePointerUp)
+      document.removeEventListener('pointercancel', handlePointerUp)
+      document.body.classList.remove('is-dragging-timeline')
     }
 
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp, { once: true })
+    document.addEventListener('pointermove', handlePointerMove)
+    document.addEventListener('pointerup', handlePointerUp)
+    document.addEventListener('pointercancel', handlePointerUp)
   }
 
   return (

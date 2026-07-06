@@ -10,6 +10,8 @@ const storageRoot = '/mnt/storage-alfgow/alfgow-nvr'
 const liveRoot = path.join(storageRoot, 'live')
 const recordingsRoot = path.join(storageRoot, 'recordings')
 const cameraIds = ['cam1', 'cam2', 'cam3', 'cam4']
+const recordingWindowMs = 48 * 60 * 60 * 1000
+const recordingWindowSeconds = recordingWindowMs / 1000
 
 for (const cameraId of cameraIds) {
   fs.mkdirSync(path.join(liveRoot, cameraId), { recursive: true })
@@ -210,14 +212,16 @@ async function readRecordingSegments(cameraId) {
     .sort((first, second) => first.sortKey.localeCompare(second.sortKey))
 
   if (!fileSegments.length) {
-    return manifestSegments.sort((first, second) => Date.parse(first.programDateTime) - Date.parse(second.programDateTime))
+    return limitSegmentsToRetention(
+      manifestSegments.sort((first, second) => Date.parse(first.programDateTime) - Date.parse(second.programDateTime)),
+    )
   }
 
-  return fileSegments.map((segment, index) => ({
+  return limitSegmentsToRetention(fileSegments.map((segment, index) => ({
     uri: segment.uri,
     duration: getIndexedSegmentDuration(segment, fileSegments[index + 1], manifestDurations),
     programDateTime: segment.programDateTime,
-  }))
+  })))
 }
 
 async function readManifestSegments(cameraRoot) {
@@ -252,6 +256,57 @@ function getIndexedSegmentDuration(segment, nextSegment, manifestDurations) {
   }
 
   return 60
+}
+
+function limitSegmentsToRetention(segments) {
+  if (!segments.length) return []
+
+  const normalizedSegments = segments
+    .map((segment) => ({
+      ...segment,
+      duration: Number.isFinite(Number(segment.duration)) && Number(segment.duration) > 0
+        ? Number(segment.duration)
+        : 60,
+    }))
+    .filter((segment) => Number.isFinite(Date.parse(segment.programDateTime)))
+
+  if (!normalizedSegments.length) return []
+
+  const newestEnd = normalizedSegments.reduce((latest, segment) => {
+    const segmentStart = Date.parse(segment.programDateTime)
+    if (!Number.isFinite(segmentStart)) return latest
+
+    const segmentEnd = segmentStart + segment.duration * 1000
+    return Math.max(latest, segmentEnd)
+  }, 0)
+
+  if (!Number.isFinite(newestEnd) || newestEnd <= 0) return normalizedSegments
+
+  const cutoff = newestEnd - recordingWindowMs
+  const windowSegments = normalizedSegments.filter((segment) => {
+    const segmentStart = Date.parse(segment.programDateTime)
+    if (!Number.isFinite(segmentStart)) return false
+
+    return segmentStart >= cutoff && segmentStart <= newestEnd
+  })
+
+  return limitSegmentsByDuration(windowSegments, recordingWindowSeconds)
+}
+
+function limitSegmentsByDuration(segments, maxDurationSeconds) {
+  const selected = []
+  let duration = 0
+
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index]
+    const segmentDuration = Number(segment.duration) || 0
+    if (selected.length && duration + segmentDuration > maxDurationSeconds) break
+
+    selected.push(segment)
+    duration += segmentDuration
+  }
+
+  return selected.reverse()
 }
 
 function buildVodPlaylist(cameraId, segments) {
