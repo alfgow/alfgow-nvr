@@ -6,6 +6,11 @@ function formatDateTimeLocal(date) {
   return offsetDate.toISOString().slice(0, 16)
 }
 
+function formatDateTimeQuery(date) {
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return offsetDate.toISOString().slice(0, 19)
+}
+
 function formatRangeDate(value) {
   if (!value) return 'Sin datos'
 
@@ -126,8 +131,16 @@ export default function PlaybackView({ cameras }) {
     }
 
     const defaultDuration = Math.min(duration, 5 * 60)
+    const selectedOffset = getOffsetSeconds(selectedDateTime)
+
+    if (Number.isFinite(selectedOffset) && selectedOffset >= 0 && selectedOffset <= duration) {
+      const start = clamp(selectedOffset, 0, Math.max(duration - defaultDuration, 0))
+      setClipSelection({ start, end: start + defaultDuration })
+      return
+    }
+
     setClipSelection({ start: duration - defaultDuration, end: duration })
-  }, [recording.available, recording.startTime, totalDuration])
+  }, [recording.available, recording.startTime, selectedDateTime, totalDuration])
 
   function seekToSelectedTime() {
     const video = videoRef.current
@@ -145,13 +158,13 @@ export default function PlaybackView({ cameras }) {
 
   function jumpToNow() {
     const value = formatDateTimeLocal(new Date())
-    setSelectedDateTime(value)
+    setPlaybackDateTime(value)
   }
 
   function jumpToYesterday() {
     const date = new Date()
     date.setDate(date.getDate() - 1)
-    setSelectedDateTime(formatDateTimeLocal(date))
+    setPlaybackDateTime(formatDateTimeLocal(date))
   }
 
   function getTimelineOffset() {
@@ -181,8 +194,8 @@ export default function PlaybackView({ cameras }) {
   const canDownloadClip = Boolean(recording.available && clipStartDate && clipEndDate && clipEnd > clipStart)
   const clipDownloadUrl = canDownloadClip
     ? `/api/recordings/${selectedCameraId}/download?${new URLSearchParams({
-      start: clipStartDate.toISOString(),
-      end: clipEndDate.toISOString(),
+      start: formatDateTimeQuery(clipStartDate),
+      end: formatDateTimeQuery(clipEndDate),
     }).toString()}`
     : '#'
   const timelineSelectionStyle = {
@@ -196,6 +209,32 @@ export default function PlaybackView({ cameras }) {
     const start = new Date(recording.startTime).getTime()
     if (!Number.isFinite(start)) return null
     return new Date(start + offsetSeconds * 1000)
+  }
+
+  function getOffsetSeconds(value) {
+    if (!recording.startTime || !value) return Number.NaN
+
+    const start = new Date(recording.startTime).getTime()
+    const target = new Date(value).getTime()
+    if (!Number.isFinite(start) || !Number.isFinite(target)) return Number.NaN
+
+    return (target - start) / 1000
+  }
+
+  function setPlaybackDateTime(value) {
+    setSelectedDateTime(value)
+    syncClipSelectionToDateTime(value)
+  }
+
+  function syncClipSelectionToDateTime(value) {
+    if (!recording.available || timelineMax <= 0) return
+
+    const targetOffset = getOffsetSeconds(value)
+    if (!Number.isFinite(targetOffset)) return
+
+    const duration = clipDuration > 0 ? clipDuration : Math.min(timelineMax, 5 * 60)
+    const start = clamp(targetOffset, 0, Math.max(timelineMax - duration, 0))
+    setClipSelection({ start, end: start + duration })
   }
 
   function updateClipStart(value) {
@@ -274,7 +313,7 @@ export default function PlaybackView({ cameras }) {
                 id="playback-time"
                 type="datetime-local"
                 value={selectedDateTime}
-                onChange={(event) => setSelectedDateTime(event.target.value)}
+                onChange={(event) => setPlaybackDateTime(event.target.value)}
                 min={recording.startTime ? formatDateTimeLocal(new Date(recording.startTime)) : undefined}
                 max={recording.endTime ? formatDateTimeLocal(new Date(recording.endTime)) : undefined}
                 className="datetime-input"

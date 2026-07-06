@@ -62,8 +62,7 @@ app.get('/api/recordings/:cameraId/download', async (req, res) => {
 
   try {
     const cameraRoot = path.resolve(recordingsRoot, cameraId)
-    const manifest = await fs.promises.readFile(path.join(cameraRoot, 'index.m3u8'), 'utf8')
-    const segments = selectSegmentsForRange(parseHlsSegments(manifest), startMs, endMs)
+    const segments = selectSegmentsForRange(await readRecordingSegments(cameraId), startMs, endMs)
 
     if (!segments.length) {
       res.status(404).json({ error: 'No segments found for selected range' })
@@ -101,6 +100,33 @@ app.get('/api/recordings/:cameraId/download', async (req, res) => {
   }
 })
 
+app.get('/api/recordings/:cameraId/playlist.m3u8', async (req, res) => {
+  const { cameraId } = req.params
+  if (!cameraIds.includes(cameraId)) {
+    res.status(404).send('Camera not found')
+    return
+  }
+
+  try {
+    const segments = await readRecordingSegments(cameraId)
+    if (!segments.length) {
+      res.status(404).send('No recordings found')
+      return
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.send(buildVodPlaylist(cameraId, segments))
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      res.status(404).send('No recordings found')
+      return
+    }
+
+    res.status(500).send('Unable to build recording playlist')
+  }
+})
+
 app.get('/api/recordings/:cameraId', async (req, res) => {
   const { cameraId } = req.params
   if (!cameraIds.includes(cameraId)) {
@@ -108,12 +134,10 @@ app.get('/api/recordings/:cameraId', async (req, res) => {
     return
   }
 
-  const manifestPath = path.join(recordingsRoot, cameraId, 'index.m3u8')
-  const playlistUrl = `/recordings/${cameraId}/index.m3u8`
+  const playlistUrl = `/api/recordings/${cameraId}/playlist.m3u8`
 
   try {
-    const manifest = await fs.promises.readFile(manifestPath, 'utf8')
-    const segments = parseHlsSegments(manifest)
+    const segments = await readRecordingSegments(cameraId)
 
     res.json({
       available: segments.length > 0,
@@ -171,6 +195,85 @@ function parseHlsSegments(manifest) {
   return segments.filter((segment) => segment.programDateTime)
 }
 
+async function readRecordingSegments(cameraId) {
+  const cameraRoot = path.join(recordingsRoot, cameraId)
+  const manifestSegments = await readManifestSegments(cameraRoot)
+  const manifestDurations = new Map(
+    manifestSegments.map((segment) => [segment.uri, segment.duration]).filter(([, duration]) => duration > 0),
+  )
+
+  const files = await fs.promises.readdir(cameraRoot, { withFileTypes: true })
+  const fileSegments = files
+    .filter((entry) => entry.isFile())
+    .map((entry) => parseSegmentFile(entry.name))
+    .filter(Boolean)
+    .sort((first, second) => first.sortKey.localeCompare(second.sortKey))
+
+  if (!fileSegments.length) {
+    return manifestSegments.sort((first, second) => Date.parse(first.programDateTime) - Date.parse(second.programDateTime))
+  }
+
+  return fileSegments.map((segment, index) => ({
+    uri: segment.uri,
+    duration: getIndexedSegmentDuration(segment, fileSegments[index + 1], manifestDurations),
+    programDateTime: segment.programDateTime,
+  }))
+}
+
+async function readManifestSegments(cameraRoot) {
+  try {
+    const manifest = await fs.promises.readFile(path.join(cameraRoot, 'index.m3u8'), 'utf8')
+    return parseHlsSegments(manifest)
+  } catch (error) {
+    if (error.code === 'ENOENT') return []
+    throw error
+  }
+}
+
+function parseSegmentFile(filename) {
+  const match = filename.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})\.ts$/)
+  if (!match) return null
+
+  const [, year, month, day, hour, minute, second] = match
+  return {
+    uri: filename,
+    programDateTime: `${year}-${month}-${day}T${hour}:${minute}:${second}`,
+    sortKey: `${year}${month}${day}${hour}${minute}${second}`,
+  }
+}
+
+function getIndexedSegmentDuration(segment, nextSegment, manifestDurations) {
+  const manifestDuration = manifestDurations.get(segment.uri)
+  if (Number.isFinite(manifestDuration) && manifestDuration > 0) return manifestDuration
+
+  if (nextSegment) {
+    const diffSeconds = (Date.parse(nextSegment.programDateTime) - Date.parse(segment.programDateTime)) / 1000
+    if (Number.isFinite(diffSeconds) && diffSeconds > 0 && diffSeconds <= 300) return diffSeconds
+  }
+
+  return 60
+}
+
+function buildVodPlaylist(cameraId, segments) {
+  const targetDuration = Math.max(1, Math.ceil(Math.max(...segments.map((segment) => segment.duration || 0))))
+  const lines = [
+    '#EXTM3U',
+    '#EXT-X-VERSION:3',
+    `#EXT-X-TARGETDURATION:${targetDuration}`,
+    '#EXT-X-MEDIA-SEQUENCE:0',
+    '#EXT-X-PLAYLIST-TYPE:VOD',
+  ]
+
+  for (const segment of segments) {
+    lines.push(`#EXT-X-PROGRAM-DATE-TIME:${segment.programDateTime}`)
+    lines.push(`#EXTINF:${Number(segment.duration || 0).toFixed(3)},`)
+    lines.push(`/recordings/${cameraId}/${encodeURI(segment.uri)}`)
+  }
+
+  lines.push('#EXT-X-ENDLIST')
+  return `${lines.join('\n')}\n`
+}
+
 function selectSegmentsForRange(segments, startMs, endMs) {
   return segments.filter((segment) => {
     const segmentStart = new Date(segment.programDateTime).getTime()
@@ -216,7 +319,17 @@ function getSegmentEndTime(segment) {
   const start = new Date(segment.programDateTime).getTime()
   if (!Number.isFinite(start)) return null
 
-  return new Date(start + segment.duration * 1000).toISOString()
+  return formatServerDateTime(new Date(start + segment.duration * 1000))
+}
+
+function formatServerDateTime(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  const second = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}`
 }
 
 app.listen(PORT, '0.0.0.0', () => {
