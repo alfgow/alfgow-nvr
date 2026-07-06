@@ -17,6 +17,17 @@ function formatRangeDate(value) {
   })
 }
 
+function formatDuration(value) {
+  const totalSeconds = Math.max(Math.round(value), 0)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  if (hours) return `${hours} h ${minutes ? `${minutes} min` : ''}`.trim()
+  if (minutes) return `${minutes} min${seconds ? ` ${seconds} s` : ''}`
+  return `${seconds} s`
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
 }
@@ -28,6 +39,7 @@ export default function PlaybackView({ cameras }) {
   const [selectedDateTime, setSelectedDateTime] = useState(formatDateTimeLocal(new Date()))
   const [recording, setRecording] = useState({ loading: true, available: false, segments: [] })
   const [error, setError] = useState('')
+  const [clipSelection, setClipSelection] = useState({ start: 0, end: 0 })
 
   const selectedCamera = useMemo(
     () => cameras.find((camera) => camera.id === selectedCameraId) ?? cameras[0],
@@ -106,6 +118,17 @@ export default function PlaybackView({ cameras }) {
     seekToSelectedTime()
   }, [selectedDateTime, recording.startTime, totalDuration])
 
+  useEffect(() => {
+    const duration = Math.max(Math.round(totalDuration), 0)
+    if (!recording.available || duration <= 0) {
+      setClipSelection({ start: 0, end: 0 })
+      return
+    }
+
+    const defaultDuration = Math.min(duration, 5 * 60)
+    setClipSelection({ start: duration - defaultDuration, end: duration })
+  }, [recording.available, recording.startTime, totalDuration])
+
   function seekToSelectedTime() {
     const video = videoRef.current
     if (!video || !recording.startTime || !selectedDateTime || totalDuration <= 0) return
@@ -143,6 +166,57 @@ export default function PlaybackView({ cameras }) {
 
   const segmentCount = recording.segments?.length ?? 0
   const selectedDisplayTime = selectedDateTime ? selectedDateTime.replace('T', ' ') : 'Sin fecha'
+  const timelineMax = Math.max(Math.round(totalDuration), 1)
+  const minClipDuration = recording.available ? Math.min(60, timelineMax) : 0
+  const maxClipStart = Math.max(timelineMax - minClipDuration, 0)
+  const clipStart = recording.available
+    ? clamp(Math.round(clipSelection.start), 0, maxClipStart)
+    : 0
+  const clipEnd = recording.available
+    ? clamp(Math.max(Math.round(clipSelection.end), clipStart + minClipDuration), minClipDuration, timelineMax)
+    : 0
+  const clipDuration = Math.max(clipEnd - clipStart, 0)
+  const clipStartDate = getClipDate(clipStart)
+  const clipEndDate = getClipDate(clipEnd)
+  const canDownloadClip = Boolean(recording.available && clipStartDate && clipEndDate && clipEnd > clipStart)
+  const clipDownloadUrl = canDownloadClip
+    ? `/api/recordings/${selectedCameraId}/download?${new URLSearchParams({
+      start: clipStartDate.toISOString(),
+      end: clipEndDate.toISOString(),
+    }).toString()}`
+    : '#'
+  const timelineSelectionStyle = {
+    '--clip-start': `${(clipStart / timelineMax) * 100}%`,
+    '--clip-width': `${((clipEnd - clipStart) / timelineMax) * 100}%`,
+    '--timeline-playhead': `${(clamp(timelineOffset, 0, timelineMax) / timelineMax) * 100}%`,
+  }
+
+  function getClipDate(offsetSeconds) {
+    if (!recording.startTime) return null
+    const start = new Date(recording.startTime).getTime()
+    if (!Number.isFinite(start)) return null
+    return new Date(start + offsetSeconds * 1000)
+  }
+
+  function updateClipStart(value) {
+    setClipSelection((current) => ({
+      ...current,
+      start: clamp(Number(value), 0, Math.max(clipEnd - minClipDuration, 0)),
+    }))
+  }
+
+  function updateClipEnd(value) {
+    setClipSelection((current) => ({
+      ...current,
+      end: clamp(Number(value), clipStart + minClipDuration, timelineMax),
+    }))
+  }
+
+  function seekFromTimeline(value) {
+    if (!recording.startTime) return
+    const date = new Date(new Date(recording.startTime).getTime() + Number(value) * 1000)
+    setSelectedDateTime(formatDateTimeLocal(date))
+  }
 
   return (
     <section className="playback-layout">
@@ -253,19 +327,69 @@ export default function PlaybackView({ cameras }) {
             </div>
             <span>{formatRangeDate(recording.startTime)} — {formatRangeDate(recording.endTime)}</span>
           </div>
-          <input
-            type="range"
-            min="0"
-            max={Math.max(Math.round(totalDuration), 1)}
-            value={timelineOffset}
-            onChange={(event) => {
-              if (!recording.startTime) return
-              const date = new Date(new Date(recording.startTime).getTime() + Number(event.target.value) * 1000)
-              setSelectedDateTime(formatDateTimeLocal(date))
-            }}
-            className="timeline-range"
-            disabled={!recording.available}
-          />
+
+          <div className="clip-selection-summary">
+            <div>
+              <span>Selección</span>
+              <strong>
+                {clipStartDate && clipEndDate
+                  ? `${formatRangeDate(clipStartDate)} — ${formatRangeDate(clipEndDate)}`
+                  : 'Sin rango seleccionado'}
+              </strong>
+            </div>
+            <a
+              className={`clip-download ${canDownloadClip ? '' : 'is-disabled'}`}
+              href={clipDownloadUrl}
+              onClick={(event) => {
+                if (!canDownloadClip) event.preventDefault()
+              }}
+            >
+              Descargar {formatDuration(clipDuration)}
+            </a>
+          </div>
+
+          <div className="timeline-selector" style={timelineSelectionStyle}>
+            <div className="timeline-selector-track">
+              <span className="timeline-selection-fill" />
+              <span className="timeline-playhead-marker" />
+            </div>
+            <input
+              type="range"
+              min="0"
+              max={timelineMax}
+              value={timelineOffset}
+              onChange={(event) => seekFromTimeline(event.target.value)}
+              className="timeline-seek-range"
+              disabled={!recording.available}
+              aria-label="Mover reproducción"
+            />
+            <input
+              type="range"
+              min="0"
+              max={timelineMax}
+              value={clipStart}
+              onChange={(event) => updateClipStart(event.target.value)}
+              className="timeline-handle timeline-handle--start"
+              disabled={!recording.available}
+              aria-label="Inicio del clip"
+            />
+            <input
+              type="range"
+              min="0"
+              max={timelineMax}
+              value={clipEnd}
+              onChange={(event) => updateClipEnd(event.target.value)}
+              className="timeline-handle timeline-handle--end"
+              disabled={!recording.available}
+              aria-label="Fin del clip"
+            />
+          </div>
+
+          <div className="clip-selection-meta">
+            <span>Inicio <strong>{clipStartDate ? formatRangeDate(clipStartDate) : 'Sin datos'}</strong></span>
+            <span>{formatDuration(clipDuration)} seleccionados</span>
+            <span>Fin <strong>{clipEndDate ? formatRangeDate(clipEndDate) : 'Sin datos'}</strong></span>
+          </div>
         </div>
       </div>
     </section>

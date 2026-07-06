@@ -46,6 +46,61 @@ app.use('/recordings', express.static(recordingsRoot, {
   }
 }))
 
+app.get('/api/recordings/:cameraId/download', async (req, res) => {
+  const { cameraId } = req.params
+  if (!cameraIds.includes(cameraId)) {
+    res.status(404).json({ error: 'Camera not found' })
+    return
+  }
+
+  const startMs = Date.parse(String(req.query.start ?? ''))
+  const endMs = Date.parse(String(req.query.end ?? ''))
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    res.status(400).json({ error: 'Invalid clip range' })
+    return
+  }
+
+  try {
+    const cameraRoot = path.resolve(recordingsRoot, cameraId)
+    const manifest = await fs.promises.readFile(path.join(cameraRoot, 'index.m3u8'), 'utf8')
+    const segments = selectSegmentsForRange(parseHlsSegments(manifest), startMs, endMs)
+
+    if (!segments.length) {
+      res.status(404).json({ error: 'No segments found for selected range' })
+      return
+    }
+
+    const filePaths = segments.map((segment) => getSegmentFilePath(cameraRoot, segment.uri))
+    if (filePaths.some((filePath) => !filePath)) {
+      res.status(400).json({ error: 'Invalid segment path' })
+      return
+    }
+
+    const stats = await Promise.all(filePaths.map((filePath) => fs.promises.stat(filePath)))
+    const totalBytes = stats.reduce((total, stat) => total + stat.size, 0)
+    const filename = buildClipFilename(cameraId, startMs, endMs)
+
+    res.setHeader('Content-Type', 'video/mp2t')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Content-Length', String(totalBytes))
+    res.setHeader('Cache-Control', 'no-store')
+
+    await streamSegmentFiles(filePaths, res)
+  } catch (error) {
+    if (res.headersSent) {
+      res.destroy(error)
+      return
+    }
+
+    if (error.code === 'ENOENT') {
+      res.status(404).json({ error: 'Recording segment not found' })
+      return
+    }
+
+    res.status(500).json({ error: 'Unable to create clip download' })
+  }
+})
+
 app.get('/api/recordings/:cameraId', async (req, res) => {
   const { cameraId } = req.params
   if (!cameraIds.includes(cameraId)) {
@@ -104,7 +159,7 @@ function parseHlsSegments(manifest) {
 
     if (line && !line.startsWith('#')) {
       segments.push({
-        uri: line,
+        uri: line.trim(),
         duration: Number.isFinite(duration) ? duration : 0,
         programDateTime,
       })
@@ -114,6 +169,45 @@ function parseHlsSegments(manifest) {
   }
 
   return segments.filter((segment) => segment.programDateTime)
+}
+
+function selectSegmentsForRange(segments, startMs, endMs) {
+  return segments.filter((segment) => {
+    const segmentStart = new Date(segment.programDateTime).getTime()
+    if (!Number.isFinite(segmentStart)) return false
+
+    const segmentEnd = segmentStart + segment.duration * 1000
+    return segmentEnd > startMs && segmentStart < endMs
+  })
+}
+
+function getSegmentFilePath(cameraRoot, uri) {
+  const segmentPath = path.resolve(cameraRoot, uri)
+  if (segmentPath !== cameraRoot && !segmentPath.startsWith(`${cameraRoot}${path.sep}`)) {
+    return null
+  }
+
+  return segmentPath
+}
+
+function buildClipFilename(cameraId, startMs, endMs) {
+  const start = new Date(startMs).toISOString().replaceAll(':', '-').replaceAll('.', '-')
+  const end = new Date(endMs).toISOString().replaceAll(':', '-').replaceAll('.', '-')
+  return `${cameraId}-${start}_${end}.ts`
+}
+
+async function streamSegmentFiles(filePaths, res) {
+  for (const filePath of filePaths) {
+    if (res.destroyed) return
+    await new Promise((resolve, reject) => {
+      const stream = fs.createReadStream(filePath)
+      stream.on('error', reject)
+      stream.on('end', resolve)
+      stream.pipe(res, { end: false })
+    })
+  }
+
+  if (!res.destroyed) res.end()
 }
 
 function getSegmentEndTime(segment) {
